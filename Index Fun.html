@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice Audit Pro v9.5</title>
+    <title>Invoice Audit Pro v9.6 (Safe Boot)</title>
     <style id="styler-vars">
         :root { 
             --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; --text: #2c3e50;
@@ -11,7 +11,6 @@
         body { font-family: 'Segoe UI', system-ui; background: #f0f3f6; margin: 0; padding: 20px; color: var(--text); font-size: var(--global-fs); margin-bottom: 120px; }
         .container { width: var(--ui-width); margin: auto; position: relative; }
         
-        /* 侧边拖拽手柄 */
         .resizer-bar { position: fixed; right: 0; top: 0; width: 12px; height: 100vh; background: #ddd; cursor: ew-resize; opacity: 0.3; z-index: 10000; }
         .resizer-bar:hover { opacity: 1; background: var(--primary); }
 
@@ -20,13 +19,11 @@
         .nav-link.active { color: var(--primary); border-bottom: var(--border-size) solid var(--primary); }
         .live-stat { margin-left: auto; font-size: 0.85em; background: #e2e8f0; padding: 6px 16px; border-radius: 20px; font-weight: bold; color: #475569; }
 
-        /* 右下角计分板 */
         .scoreboard { position: fixed; bottom: 25px; right: 25px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: var(--border-size) solid #e2e8f0; border-radius: 16px; padding: 18px 25px; box-shadow: 0 12px 40px rgba(0,0,0,0.12); z-index: 9999; display: flex; gap: 30px; border-left: 8px solid var(--primary); }
         .score-item { display: flex; flex-direction: column; }
         .score-label { font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
         .score-val { font-family: 'Consolas', monospace; font-weight: bold; font-size: 1.2em; margin-top: 6px; }
 
-        /* 面板与表格 */
         .panel { background: white; padding: var(--card-padding); border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; border: var(--border-size) solid #e2e8f0; }
         .init-grid { display: grid; grid-template-columns: 180px 1fr 1fr 1fr 1fr auto; gap: 15px; align-items: end; }
         input, select, button, textarea { padding: 12px; border: var(--border-size) solid #cbd5e0; border-radius: 8px; font-size: inherit; width: 100%; box-sizing: border-box; }
@@ -124,27 +121,42 @@
 </div>
 
 <script>
-    // --- Data Management ---
+    // --- Safe Storage Wrapper (防崩溃装甲) ---
+    const Store = {
+        get: function(key, def) {
+            try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
+            catch(e) { console.warn("Storage Read Blocked by IT Policy"); return def; }
+        },
+        set: function(key, val) {
+            try { localStorage.setItem(key, JSON.stringify(val)); }
+            catch(e) { console.warn("Storage Write Blocked by IT Policy"); }
+        }
+    };
+
     let app = {
-        batches: JSON.parse(localStorage.getItem('aud_v95_batches')) || [],
-        threshold: parseFloat(localStorage.getItem('aud_v95_threshold')) || 10000,
-        config: JSON.parse(localStorage.getItem('aud_v95_config')) || { catA:"HK", catB:"Cycle", catC:"Admin", typeP:"Payment", typeR:"Receipt" },
-        styles: JSON.parse(localStorage.getItem('aud_v95_styles')) || { fs: 18, bs: 2, wd: 1350 },
-        entities: JSON.parse(localStorage.getItem('aud_v95_entities')) || {"ABC": "Example Co"},
-        dismissed: JSON.parse(localStorage.getItem('aud_v95_dismissed')) || []
+        batches: Store.get('aud_v96_batches', []),
+        threshold: parseFloat(Store.get('aud_v96_threshold', 10000)) || 10000,
+        config: Store.get('aud_v96_config', { catA:"HK", catB:"Cycle", catC:"Admin", typeP:"Payment", typeR:"Receipt" }),
+        styles: Store.get('aud_v96_styles', { fs: 18, bs: 2, wd: 1350 }),
+        entities: Store.get('aud_v96_entities', {"ABC": "Example Co"}),
+        dismissed: Store.get('aud_v96_dismissed', [])
     };
 
     function commit() {
-        localStorage.setItem('aud_v95_batches', JSON.stringify(app.batches));
-        localStorage.setItem('aud_v95_threshold', app.threshold);
-        localStorage.setItem('aud_v95_config', JSON.stringify(app.config));
-        localStorage.setItem('aud_v95_entities', JSON.stringify(app.entities));
-        localStorage.setItem('aud_v95_styles', JSON.stringify(app.styles));
-        localStorage.setItem('aud_v95_dismissed', JSON.stringify(app.dismissed));
+        try {
+            Store.set('aud_v96_batches', app.batches);
+            Store.set('aud_v96_threshold', app.threshold);
+            Store.set('aud_v96_config', app.config);
+            Store.set('aud_v96_entities', app.entities);
+            Store.set('aud_v96_styles', app.styles);
+            Store.set('aud_v96_dismissed', app.dismissed);
+        } catch(e) {
+            // Silently fail if storage is completely locked out
+        }
         render();
     }
 
-    // --- Navigation ---
+    // --- Core Logic ---
     function route(p) {
         document.getElementById('nav-main').classList.toggle('active', p==='main');
         document.getElementById('nav-settings').classList.toggle('active', p==='settings');
@@ -153,16 +165,12 @@
         if(p==='main') render(); else loadSettingsUI();
     }
 
-    // --- Core Logic ---
     function isPast(d) { const today = new Date(); today.setHours(0,0,0,0); return new Date(d + "T00:00:00") < today; }
 
     function checkB() {
         const c = document.getElementById('in-cat').value;
         const p = document.getElementById('in-period');
-        if(p) {
-            p.disabled = (c==='B');
-            if(p.disabled) p.value="";
-        }
+        if(p) { p.disabled = (c==='B'); if(p.disabled) p.value=""; }
     }
 
     function buildDrops() {
@@ -207,14 +215,10 @@
         commit();
     }
 
-    // --- Logic Helpers (To prevent inline string nesting) ---
     function toggleStep(bUid, iUid, idx) {
         const b = app.batches.find(x=>x.uid===bUid);
         const i = b.invoices.find(y=>y.uid===iUid);
-        if(b && i && !b.isPosted) {
-            i.steps[idx] = !i.steps[idx];
-            commit();
-        }
+        if(b && i && !b.isPosted) { i.steps[idx] = !i.steps[idx]; commit(); }
     }
 
     function postBatch(bUid) {
@@ -268,7 +272,6 @@
             }
         });
 
-        // Scoreboard Update
         document.getElementById('sb-label-paid').innerText = `Cumulative ${app.config.typeP}`;
         document.getElementById('sb-val-paid').innerText = `$${totalPaid.toLocaleString()}`;
         document.getElementById('sb-label-rec').innerText = `Cumulative ${app.config.typeR}`;
@@ -278,7 +281,7 @@
 
         Object.keys(daily).filter(d=>daily[d]>app.threshold).forEach(d => {
             if(!app.dismissed.includes(d)) {
-                alerts.innerHTML += `<div class="alert-box"><span>⚠️ ${d}: $${daily[daily[d]>app.threshold?d:''].toLocaleString()} exceeds threshold!</span><button class="btn-dismiss" onclick="muteAlert('${d}')">I've notified Finance</button></div>`;
+                alerts.innerHTML += `<div class="alert-box"><span>⚠️ ${d}: $${daily[d].toLocaleString()} exceeds threshold!</span><button class="btn-dismiss" onclick="muteAlert('${d}')">I've notified Finance</button></div>`;
             }
         });
 
@@ -320,4 +323,4 @@
                         <label><input type="checkbox" ${i.steps[1]?'checked':''} onclick="toggleStep('${b.uid}','${i.uid}',1)" ${b.isPosted?'disabled':''}> Sent</label>
                         <label><input type="checkbox" ${i.steps[2]?'checked':''} onclick="toggleStep('${b.uid}','${i.uid}',2)" ${b.isPosted?'disabled':''}> Approved</label>
                     </div>
-                    <div class="amt-display ${i.amount>=0?'amt-pos':'amt-neg'}" onclick="editInv('${b.uid}','${i.uid}','amount','${i.amount}')">$${i.amount.toL
+                    <div class="amt-display ${i.amount>=0?'amt-pos':'amt-neg'}" onclick="editInv('${b.uid}'
