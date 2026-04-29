@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Audit Pro v8.9 - Terminal</title>
+    <style id="dynamic-css">
+        :root { 
+            --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; --text: #2c3e50;
+            --global-fs: 18px; --border-size: 1px; --card-padding: 30px; --ui-width: 1300px;
+        }
+        body { font-family: 'Segoe UI', system-ui; background: #f0f2f5; margin: 0; padding: 20px; color: var(--text); font-size: var(--global-fs); }
+        .container { width: var(--ui-width); margin: auto; position: relative; }
+        
+        /* 全局拖拽手柄 */
+        .resizer-handle { position: fixed; right: 5px; top: 20%; width: 12px; height: 60%; background: #ddd; cursor: ew-resize; border-radius: 10px; opacity: 0.4; z-index: 9999; border: 1px solid #ccc; }
+        .resizer-handle:hover { opacity: 1; background: var(--primary); }
+
+        .nav-bar { display: flex; gap: 25px; margin-bottom: 25px; border-bottom: calc(var(--border-size) * 2) solid #ccc; padding-bottom: 15px; }
+        .nav-link { cursor: pointer; font-weight: bold; color: #7f8c8d; font-size: 1.1em; transition: 0.2s; }
+        .nav-link.active { color: var(--primary); border-bottom: calc(var(--border-size) * 2) solid var(--primary); }
+        
+        .panel { background: white; padding: var(--card-padding); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 25px; border: var(--border-size) solid #e0e0e0; }
+        .grid-new { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr 1fr 120px; gap: 15px; align-items: end; }
+        input, select, button, textarea { padding: 12px; border: var(--border-size) solid #d1d9e0; border-radius: 8px; font-size: var(--global-fs); box-sizing: border-box; }
+        .btn-main { background: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn-main:hover { filter: brightness(1.1); }
+
+        /* Batch Card */
+        .batch-card { background: white; border-radius: 15px; margin-bottom: 30px; border-top: 8px solid #95a5a6; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .batch-card.is-posted { opacity: 0.5; filter: grayscale(0.7); pointer-events: none; }
+        .batch-card.is-posted .post-label { pointer-events: auto; }
+        .batch-header { padding: 20px; background: #fbfbfb; display: grid; grid-template-columns: 1fr auto; border-bottom: var(--border-size) solid #eee; border-radius: 15px 15px 0 0; }
+        
+        /* Invoice Rows */
+        .inv-row { display: grid; grid-template-columns: 100px 160px 200px 180px 380px 1fr 50px; gap: 15px; padding: 15px 20px; border-bottom: var(--border-size) solid #f0f0f0; align-items: center; }
+        .editable { cursor: pointer; border-radius: 4px; padding: 2px 5px; }
+        .editable:hover { background: #eef5ff; color: var(--primary); }
+        .font-sync { font-family: 'Consolas', monospace; font-weight: bold; }
+        
+        .step-group { display: flex; flex-direction: column; gap: 5px; font-size: 0.75em; font-weight: bold; color: #7f8c8d; }
+        .step-group label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        
+        .amt-box { text-align: right; font-family: 'Consolas', monospace; font-weight: bold; }
+        .ol-prefix { display: flex; align-items: center; background: #f0f0f0; border: var(--border-size) solid #d1d9e0; border-radius: 8px; overflow: hidden; }
+        .ol-prefix span { padding: 0 12px; font-weight: bold; color: #555; }
+        .ol-prefix input { border: none; flex: 1; background: transparent; }
+
+        .comment-area { width: 100%; margin-top: 10px; border: 1px dashed #ccc; font-style: italic; background: #fafafa; padding: 8px; border-radius: 5px; min-height: 40px; }
+        .alert-zone { margin-bottom: 20px; }
+        .alert-box { background: #fff2f0; border: 1px solid #ffccc7; color: #cf1322; padding: 15px; border-radius: 10px; margin-bottom: 10px; border-left: 6px solid var(--urgent); font-weight: bold; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="drag-resizer" class="resizer-handle" title="Drag to resize width"></div>
+
+<div class="container" id="app-container">
+    <div class="nav-bar">
+        <span class="nav-link active" onclick="navTo('main', this)">DASHBOARD</span>
+        <span class="nav-link" onclick="navTo('settings', this)">SETTINGS & STYLER</span>
+    </div>
+
+    <div id="alert-zone" class="alert-zone"></div>
+
+    <div id="view-main">
+        <div class="panel">
+            <div class="grid-new">
+                <div style="grid-column: span 6; font-weight: bold; color: var(--primary); margin-bottom: 10px;">INITIALIZE NEW BATCH</div>
+                <div class="ol-prefix"><span>OL</span><input type="text" id="in-batch-id" placeholder="ID"></div>
+                <select id="in-batch-cat" onchange="checkCatB()">
+                    </select>
+                <select id="in-batch-type">
+                    </select>
+                <input type="month" id="in-period">
+                <input type="date" id="in-due">
+                <button class="btn-main" onclick="createBatch()">INITIALIZE</button>
+            </div>
+        </div>
+        <div id="batch-container"></div>
+    </div>
+
+    <div id="view-settings" class="hidden">
+        <div class="panel">
+            <h3>🎨 VISUAL STYLER</h3>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:25px;">
+                <div><label>Font Size (px)</label><br><input type="number" id="st-fs" onchange="applyVisuals()"></div>
+                <div><label>Border Weight (px)</label><br><input type="number" id="st-bs" onchange="applyVisuals()"></div>
+                <div><label>UI Width (px)</label><br><input type="number" id="st-width" onchange="applyVisuals()"></div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>⚙️ SYSTEM CONFIGURATION</h3>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div><label>Threshold ($)</label><br><input type="number" id="cfg-threshold"></div>
+                <div><label>Category Names (A / B / C)</label><br>
+                    <input type="text" id="cfg-catA" style="width:30%"><input type="text" id="cfg-catB" style="width:30%"><input type="text" id="cfg-catC" style="width:30%">
+                </div>
+                <div><label>Type Labels (Pay / Rec)</label><br>
+                    <input type="text" id="cfg-typeP" style="width:45%"><input type="text" id="cfg-typeR" style="width:45%">
+                </div>
+            </div>
+            <label>Entity Mapping (CODE:Vendor Name)</label>
+            <textarea id="cfg-entities" style="width:100%; height:120px; font-family:monospace; margin-top:10px;"></textarea>
+            <button class="btn-main" style="margin-top:20px; padding: 15px 40px;" onclick="saveConfig()">SAVE ALL SETTINGS</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- Data Management ---
+    let db = {
+        batches: JSON.parse(localStorage.getItem('audit_v89_batches')) || [],
+        threshold: parseFloat(localStorage.getItem('audit_v89_threshold')) || 10000,
+        config: JSON.parse(localStorage.getItem('audit_v89_config')) || {
+            catA: "HK", catB: "Cycle", catC: "Admin", typeP: "Payment", typeR: "Receipt"
+        },
+        styles: JSON.parse(localStorage.getItem('audit_v89_styles')) || { fs: 18, bs: 1, width: 1300 },
+        entities: JSON.parse(localStorage.getItem('audit_v89_entities')) || {"ABC": "ABC Corporation"}
+    };
+
+    // --- Navigation ---
+    function navTo(page, el) {
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        el.classList.add('active');
+        document.getElementById('view-main').classList.toggle('hidden', page !== 'main');
+        document.getElementById('view-settings').classList.toggle('hidden', page !== 'settings');
+        if(page === 'main') { injectDropdowns(); refreshDashboard(); }
+        if(page === 'settings') loadConfigToUI();
+    }
+
+    // --- Logic ---
+    function checkCatB() {
+        const cat = document.getElementById('in-batch-cat').value;
+        const p = document.getElementById('in-period');
+        p.disabled = (cat === 'B');
+        if(p.disabled) p.value = "";
+    }
+
+    function injectDropdowns() {
+        document.getElementById('in-batch-cat').innerHTML = `<option value="A">${db.config.catA}</option><option value="B">${db.config.catB}</option><option value="C">${db.config.catC}</option>`;
+        document.getElementById('in-batch-type').innerHTML = `<option value="Payment">${db.config.typeP}</option><option value="Receipt">${db.config.typeR}</option>`;
+    }
+
+    function createBatch() {
+        const id = document.getElementById('in-batch-id').value;
+        const cat = document.getElementById('in-batch-cat').value;
+        const type = document.getElementById('in-batch-type').value;
+        const due = document.getElementById('in-due').value;
+        const period = document.getElementById('in-period').value;
+
+        if(!id || !due || (cat !== 'B' && !period)) return alert("Required fields missing!");
+
+        const catName = cat === 'A' ? db.config.catA : (cat === 'B' ? db.config.catB : db.config.catC);
+        const typeName = type === 'Payment' ? db.config.typeP : db.config.typeR;
+
+        db.batches.push({
+            uid: Date.now(),
+            batchId: "OL" + id,
+            title: `OL ${id} ${catName} ${typeName}`,
+            cat, type, due, period,
+            invoices: [], isPosted: false, comment: ""
+        });
+        persist();
+    }
+
+    function addInvoice(batchUid) {
+        const b = db.batches.find(x => x.uid === batchUid);
+        if(b.isPosted) return;
+
+        const code = prompt("Entity Code:").toUpperCase();
+        if(!code) return;
+        const ctr = prompt("Ctr No:");
+        const sup = prompt("Supplier:");
+        const amt = parseFloat(prompt("Amount:") || 0);
+        const vd = prompt("Value Date:", b.due);
+        const rm = (b.cat !== 'B') ? prompt("Receipt Month (YYYY-MM):") : null;
+
+        b.invoices.push({
+            uid: Date.now(), entity: code, ctr, supplier: sup, amount: amt, vd, rm,
+            vendor: db.entities[code] || `Unmapped (${code})`,
+            steps: [false, false, false], comment: ""
+        });
+        persist();
+    }
+
+    function togglePost(uid) {
+        const b = db.batches.find(x => x.uid === uid);
+        const ready = b.invoices.length > 0 && b.invoices.every(i => i.steps[2]);
+        if(!ready && !b.isPosted) return alert("Error: All invoices must be Approved before posting.");
+        b.isPosted = !b.isPosted;
+        persist();
+    }
+
+    function editInv(bUid, iUid, key, cur) {
+        const b = db.batches.find(x => x.uid === bUid);
+        if(b.isPosted) return;
+        let val = prompt(`Edit ${key}:`, cur);
+        if(val !== null) {
+            const i = b.invoices.find(x => x.uid === iUid);
+            if(key === 'amount') val = parseFloat(val) || 0;
+            if(key === 'entity') {
+                val = val.toUpperCase();
+                i.vendor = db.entities[val] || `Unmapped (${val})`;
+            }
+            i[key] = val;
+            persist();
+        }
+    }
+
+    function persist() {
+        db.batches.sort((a,b) => (a.isPosted === b.isPosted) ? new Date(a.due) - new Date(b.due) : (a.isPosted ? 1 : -1));
+        localStorage.setItem('audit_v89_batches', JSON.stringify(db.batches));
+        refreshDashboard();
+    }
+
+    function refreshDashboard() {
+        const zone = document.getElementById('alert-zone'); zone.innerHTML = "";
+        const totals = {};
+        db.batches.forEach(b => {
+            if(!b.isPosted && b.type === 'Payment') {
+                totals[b.due] = (totals[b.due] || 0) + b.invoices.reduce((s,i) => s + i.amount, 0);
+            }
+        });
+        Object.keys(totals).filter(d => totals[d] > db.threshold).forEach(d => {
+            zone.innerHTML += `<div class="alert-box">⚠️ HIGH VOLUME: ${d} | Total $${totals[d].toLocaleString()} exceeds limit.</div>`;
+        });
+
+        const container = document.getElementById('batch-container'); container.innerHTML = "";
+        db.batches.forEach(b => {
+            const sum = b.invoices.reduce((s,i) => s + i.amount, 0);
+            const dateWarn = b.invoices.some(i => i.vd !== b.due);
+            
+            let html = `
+            <div class="batch-card ${b.isPosted ? 'is-posted' : ''}" style="border-top-color: ${b.isPosted ? '#ccc' : (b.type==='Payment'?'#cf1322':'#389e0d')}">
+                <div class="batch-header">
+                    <div>
+                        <strong style="font-size:1.2em">${b.title}</strong>
+                        ${dateWarn ? '<span style="background:var(--warning); color:white; padding:2px 8px; border-radius:5px; font-size:12px; margin-left:10px;">VD MISMATCH</span>' : ''}
+                        <div style="font-size:0.8em; color:#666; margin-top:5px;">Due: ${b.due} | Period: ${b.period || 'N/A'}</div>
+                        <textarea class="comment-area" onchange="b.comment=this.value; persist()" placeholder="Batch comments...">${b.comment || ''}</textarea>
+                    </div>
+                    <div style="text-align:right">
+                        <div style="font-size:1.4em; font-weight:bold; font-family:Consolas;">$${sum.toLocaleString()}</div>
+                        <div style="margin: 10px 0;">
+                            <button onclick="addInvoice(${b.uid})">ADD INVOICE</button>
+                            <label style="margin-left:15px; font-weight:bold"><input type="checkbox" ${b.isPosted?'checked':''} onchange="togglePost(${b.uid})"> POSTED?</label>
+                        </div>
+                        <button style="color:#999; font-size:11px; border:none; background:none; cursor:pointer;" onclick="if(confirm('Delete Batch?')){db.batches=db.batches.filter(x=>x.uid!==${b.uid});persist()}">DELETE BATCH</button>
+                    </div>
+                </div>
+                <div>`;
+            
+            b.invoices.forEach(i => {
+                const vdm = i.vd !== b.due;
+                html += `
+                <div class="inv-row" style="${vdm ? 'background:#fffbe6;' : ''}">
+                    <div class="font-sync editable" onclick="editInv(${b.uid},${i.uid},'entity','${i.entity}')">${i.entity}</div>
+                    <div class="font-sync editable" onclick="editInv(${b.uid},${i.uid},'ctr','${i.ctr}')">${i.ctr}</div>
+                    <div class="editable" style="font-weight:bold" onclick="editInv(${b.uid},${i.uid},'supplier','${i.supplier}')">${i.supplier}
+                        <textarea class="comment-area" style="font-size:11px; min-height:30px" onchange="i.comment=this.value; persist()" placeholder="Invoice notes...">${i.comment || ''}</textarea>
+                    </div>
+                    <div style="font-size:0.8em; color:var(--primary)">${i.vendor}</div>
+                    <div class="step-group">
+                        <label><input type="checkbox" ${i.steps[0]?'checked':''} onclick="i.steps[0]=!i.steps[0];persist()"> CREATED</label>
+                        <label><input type="checkbox" ${i.steps[1]?'checked':''} onclick="i.steps[1]=!i.steps[1];persist()"> SENT</label>
+                        <label><input type="checkbox" ${i.steps[2]?'checked':''} onclick="i.steps[2]=!i.steps[2];persist()"> APPROVED</label>
+                    </div>
+                    <div class="amt-box ${i.amount>=0?'amt-pos':'amt-neg'}" onclick="editInv(${b.uid},${i.uid},'amount','${i.amount}')">
+                        $${i.amount.toLocaleString()}
+                        <div style="font-size:0.7em; color:#999; font-weight:normal">VD: ${i.vd} ${i.rm ? '| M: '+i.rm : ''}</div>
+                    </div>
+                    <button class="del-small" onclick="if(confirm('Delete Invoice?')){b.invoices=b.invoices.filter(x=>x.uid!==${i.uid});persist()}">✕</button>
+                </div>`;
+            });
+            html += `</div></div>`;
+            container.innerHTML += html;
+        });
+    }
+
+    // --- Configuration & Styler ---
+    function loadConfigToUI() {
+        document.getElementById('st-fs').value = db.styles.fs;
+        document.getElementById('st-bs').value = db.styles.bs;
+        document.getElementById('st-width').value = db.styles.width;
+        document.getElementById('cfg-threshold').value = db.threshold;
+        document.getElementById('cfg-catA').value = db.config.catA;
+        document.getElementById('cfg-catB').value = db.config.catB;
+        document.getElementById('cfg-catC').value = db.config.catC;
+        document.getElementById('cfg-typeP').value = db.config.typeP;
+        document.getElementById('cfg-typeR').value = db.config.typeR;
+        let t = ""; for(let k in db.entities) t += `${k}:${db.entities[k]}\n`;
+        document.getElementById('cfg-entities').value = t.trim();
+    }
+
+    function saveConfig() {
+        db.threshold = parseFloat(document.getElementById('cfg-threshold').value);
+        db.config = {
+            catA: document.getElementById('cfg-catA').value,
+            catB: document.getElementById('cfg-catB').value,
+            catC: document.getElementById('cfg-catC').value,
+            typeP: document.getElementById('cfg-typeP').value,
+            typeR: document.getElementById('cfg-typeR').value
+        };
+        const lines = document.getElementById('cfg-entities').value.split('\n');
+        db.entities = {};
+        lines.forEach(l => { const p = l.split(':'); if(p.length===2) db.entities[p[0].trim().toUpperCase()] = p[1].trim(); });
+        
+        applyVisuals();
+        localStorage.setItem('audit_v89_threshold', db.threshold);
+        localStorage.setItem('audit_v89_config', JSON.stringify(db.config));
+        localStorage.setItem('audit_v89_entities', JSON.stringify(db.entities));
+        alert("System Config Updated.");
+        navTo('main', document.querySelector('.nav-link'));
+    }
+
+    function applyVisuals() {
+        const fs = document.getElementById('st-fs').value || db.styles.fs;
+        const bs = document.getElementById('st-bs').value || db.styles.bs;
+        const wd = document.getElementById('st-width').value || db.styles.width;
+        
+        db.styles = { fs, bs, width: wd };
+        const r = document.documentElement;
+        r.style.setProperty('--global-fs', fs + 'px');
+        r.style.setProperty('--border-size', bs + 'px');
+        r.style.setProperty('--ui-width', wd + 'px');
+        localStorage.setItem('audit_v89_styles', JSON.stringify(db.styles));
+    }
+
+    // --- Mouse Resize Handle ---
+    const handle = document.getElementById('drag-resizer');
+    let dragging = false;
+    handle.addEventListener('mousedown', () => { dragging = true; document.body.style.cursor = 'ew-resize'; });
+    window.addEventListener('mousemove', (e) => {
+        if(!dragging) return;
+        const newW = e.clientX * 2;
+        if(newW > 800 && newW < window.innerWidth) {
+            db.styles.width = newW;
+            document.documentElement.style.setProperty('--ui-width', newW + 'px');
+            const wInput = document.getElementById('st-width');
+            if(wInput) wInput.value = newW;
+        }
+    });
+    window.addEventListener('mouseup', () => { 
+        if(dragging) { 
+            dragging = false; 
+            document.body.style.cursor = 'default'; 
+            localStorage.setItem('audit_v89_styles', JSON.stringify(db.styles));
+        } 
+    });
+
+    // --- Init ---
+    const r = document.documentElement;
+    r.style.setProperty('--global-fs', db.styles.fs + 'px');
+    r.style.setProperty('--border-size', db.styles.bs + 'px');
+    r.style.setProperty('--ui-width', db.styles.width + 'px');
+    injectDropdowns();
+    refreshDashboard();
+</script>
+</body>
+</html>
