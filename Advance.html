@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Audit Pro v8.4</title>
+    <style>
+        :root { --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; --text: #2c3e50; }
+        body { font-family: 'Segoe UI', system-ui; background: #f4f7f9; margin: 0; padding: 20px; color: var(--text); font-size: 14px; }
+        .container { max-width: 1200px; margin: auto; }
+        .nav-bar { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .nav-link { cursor: pointer; font-weight: bold; color: #666; transition: 0.2s; }
+        .nav-link.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+        .alert-item { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; padding: 12px 20px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid var(--urgent); font-weight: bold; }
+        .panel { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .full-width { grid-column: span 3; }
+        input, select, button { padding: 10px; border: 1px solid #d1d9e0; border-radius: 6px; font-size: 14px; }
+        .btn-main { background: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold; }
+        .batch-card { background: white; border-radius: 12px; margin-bottom: 25px; border-top: 5px solid #999; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .batch-header { padding: 15px 20px; background: #fafafa; display: flex; justify-content: space-between; border-bottom: 1px solid #eee; }
+        .warn-label { color: white; background: var(--warning); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 5px; }
+        .urgent-label { color: white; background: var(--urgent); padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; margin-left: 5px; }
+        
+        .inv-row { display: grid; grid-template-columns: 100px 140px 180px 140px 220px 1fr 40px; gap: 15px; padding: 12px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }
+        .inv-row.date-error { background: #fffbe6; }
+        .font-sync { font-size: 14px; font-family: 'Consolas', monospace; font-weight: 600; }
+        .amt-pos { color: #cf1322; font-weight: bold; text-align: right; font-family: 'Consolas', monospace; }
+        .amt-neg { color: #389e0d; font-weight: bold; text-align: right; font-family: 'Consolas', monospace; }
+        .ol-prefix { display: flex; align-items: center; background: #eee; border: 1px solid #d1d9e0; border-radius: 6px; overflow: hidden; }
+        .ol-prefix span { padding: 0 10px; font-weight: bold; }
+        .ol-prefix input { border: none; flex: 1; background: transparent; }
+        .del-small { color: #ccc; cursor: pointer; border: none; background: none; font-size: 11px; margin-left: 10px; }
+        .del-small:hover { color: var(--urgent); }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav-bar">
+        <span class="nav-link active" onclick="showPage('main', this)">Dashboard</span>
+        <span class="nav-link" onclick="showPage('settings', this)">Settings & Rules</span>
+    </div>
+
+    <div id="alert-zone"></div>
+
+    <div id="page-main">
+        <div class="panel">
+            <div class="grid-3">
+                <h3 class="full-width" style="margin-top:0">New Batch Entry</h3>
+                <div class="ol-prefix"><span>OL</span><input type="text" id="batchId" placeholder="e.g. 1111"></div>
+                <select id="batchCat" onchange="togglePeriodInput()"></select>
+                <select id="batchType"></select>
+                <input type="month" id="period">
+                <input type="date" id="dueDate">
+                <button class="btn-main" onclick="createBatch()">Create</button>
+            </div>
+        </div>
+        <div id="batch-list"></div>
+    </div>
+
+    <div id="page-settings" class="hidden">
+        <div class="panel">
+            <h3>Configuration</h3>
+            <div style="margin-bottom:20px; padding:15px; border:1px solid #eee; border-radius:8px;">
+                <strong>1. Daily Threshold ($)</strong><br>
+                <input type="number" id="thresholdSetting" style="margin-top:10px">
+            </div>
+            <div style="margin-bottom:20px; padding:15px; border:1px solid #eee; border-radius:8px;">
+                <strong>2. Category Labels (A/B/C)</strong><br>
+                <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:10px;">
+                    <input type="text" id="catAName"><input type="text" id="catBName"><input type="text" id="catCName">
+                    <input type="text" id="typePayName"><input type="text" id="typeRecName">
+                </div>
+            </div>
+            <div style="padding:15px; border:1px solid #eee; border-radius:8px;">
+                <strong>3. Entity Mapping (Code:Name)</strong><br>
+                <textarea id="entityRules" style="width:100%; height:120px; margin-top:10px; font-family:monospace; padding:10px;"></textarea>
+            </div>
+            <button class="btn-main" onclick="saveSettings()" style="margin-top:20px">Save Settings</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let state = {
+        batches: JSON.parse(localStorage.getItem('audit_batches_v84')) || [],
+        threshold: parseFloat(localStorage.getItem('audit_threshold')) || 10000,
+        config: JSON.parse(localStorage.getItem('audit_config')) || {
+            catA: "HK", catB: "Standard", catC: "Admin",
+            typePay: "Payment", typeRec: "Receipt"
+        },
+        entityMap: JSON.parse(localStorage.getItem('audit_entities')) || {"100": "Glencore Canada"}
+    };
+
+    function showPage(pageId, el) {
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        el.classList.add('active');
+        ['main', 'settings'].forEach(p => document.getElementById('page-'+p).classList.add('hidden'));
+        document.getElementById('page-'+pageId).classList.remove('hidden');
+        if(pageId === 'main') renderDropdowns();
+        if(pageId === 'settings') loadSettings();
+    }
+
+    function togglePeriodInput() {
+        const cat = document.getElementById('batchCat').value;
+        document.getElementById('period').disabled = (cat === 'B');
+    }
+
+    function renderDropdowns() {
+        document.getElementById('batchCat').innerHTML = `<option value="A">${state.config.catA}</option><option value="B">${state.config.catB}</option><option value="C">${state.config.catC}</option>`;
+        document.getElementById('batchType').innerHTML = `<option value="Payment">${state.config.typePay}</option><option value="Receipt">${state.config.typeRec}</option>`;
+        togglePeriodInput();
+    }
+
+    function createBatch() {
+        const idNum = document.getElementById('batchId').value;
+        const cat = document.getElementById('batchCat').value;
+        const type = document.getElementById('batchType').value;
+        const due = document.getElementById('dueDate').value;
+        if(!idNum || !due) return alert("Required fields missing");
+
+        const catLabel = cat === 'A' ? state.config.catA : (cat === 'B' ? state.config.catB : state.config.catC);
+        const typeLabel = type === 'Payment' ? state.config.typePay : state.config.typeRec;
+
+        state.batches.push({
+            id: Date.now(),
+            displayTitle: `OL ${idNum} ${catLabel} ${typeLabel}`,
+            category: cat,
+            type: type,
+            period: cat === 'B' ? null : document.getElementById('period').value,
+            dueDate: due,
+            invoices: []
+        });
+        saveAndRender();
+    }
+
+    function addInvoice(batchUid) {
+        const entity = prompt("Entity Code:");
+        const ctrNo = prompt("Ctr No:");
+        const supplier = prompt("Supplier Name:");
+        const amount = parseFloat(prompt("Amount:") || 0);
+        const invDue = prompt("Invoice Value Date (YYYY-MM-DD):", state.batches.find(b=>b.id===batchUid).dueDate);
+        
+        if(!entity || !ctrNo) return;
+
+        const bIdx = state.batches.findIndex(b => b.id === batchUid);
+        const batch = state.batches[bIdx];
+        const receiptMonth = (batch.category !== 'B') ? prompt("Receipt Month (YYYY-MM):") : null;
+
+        state.batches[bIdx].invoices.push({
+            id: Date.now(), entity, ctrNo, supplier, amount, invDue, receiptMonth,
+            vendor: state.entityMap[entity] || "Unknown (" + entity + ")",
+            steps: [false, false, false]
+        });
+        saveAndRender();
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('audit_batches_v84', JSON.stringify(state.batches));
+        localStorage.setItem('audit_threshold', state.threshold);
+        localStorage.setItem('audit_config', JSON.stringify(state.config));
+        localStorage.setItem('audit_entities', JSON.stringify(state.entityMap));
+        renderAlerts();
+        renderBatches();
+    }
+
+    function renderAlerts() {
+        const zone = document.getElementById('alert-zone'); zone.innerHTML = '';
+        const totals = {};
+        state.batches.forEach(b => {
+            const isDone = b.invoices.length > 0 && b.invoices.every(i => i.steps.every(s => s));
+            if(!isDone && b.type === 'Payment') {
+                totals[b.dueDate] = (totals[b.dueDate] || 0) + b.invoices.reduce((acc, curr) => acc + curr.amount, 0);
+            }
+        });
+        Object.keys(totals).filter(d => totals[d] > state.threshold).forEach(date => {
+            zone.innerHTML += `<div class="alert-item">⚠️ ${date}: Payment Total $${totals[date].toLocaleString()} exceeds threshold!</div>`;
+        });
+    }
+
+    function renderBatches() {
+        const list = document.getElementById('batch-list'); list.innerHTML = '';
+        const tomorrowStr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+        state.batches.forEach((b, bIdx) => {
+            const netSum = b.invoices.reduce((s, i) => s + i.amount, 0);
+            const isDone = b.invoices.length > 0 && b.invoices.every(i => i.steps.every(s => s));
+            const hasDateMismatch = b.invoices.some(i => i.invDue !== b.dueDate);
+
+            list.innerHTML += `
+                <div class="batch-card" style="border-top-color: ${isDone ? '#ccc' : (b.type === 'Payment' ? '#cf1322' : '#389e0d')}">
+                    <div class="batch-header">
+                        <div>
+                            <strong style="font-size:16px">${b.displayTitle}</strong>
+                            ${hasDateMismatch ? '<span class="warn-label">VD MISMATCH</span>' : ''}
+                            ${b.dueDate === tomorrowStr && !isDone ? '<span class="urgent-label">DUE TOMORROW</span>' : ''}
+                            <div style="color:#666; font-size:11px; margin-top:4px">
+                                Master Due: ${b.dueDate} | ${b.period ? 'Period: '+b.period : 'Standard'}
+                            </div>
+                        </div>
+                        <div style="text-align:right">
+                            <span style="font-size:18px; font-weight:bold">$${netSum.toLocaleString()}</span>
+                            <div style="margin-top:8px">
+                                <button onclick="addInvoice(${b.id})">+ Inv</button>
+                                <button class="del-small" onclick="confirmDeleteBatch(${bIdx})">Delete Batch</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        ${b.invoices.map((inv, iIdx) => {
+                            const dateMismatch = inv.invDue !== b.dueDate;
+                            return `
+                            <div class="inv-row ${dateMismatch ? 'date-error' : ''}">
+                                <div class="font-sync">${inv.entity}</div>
+                                <div class="font-sync">${inv.ctrNo}</div>
+                                <div style="font-size:12px">${inv.supplier}</div>
+                                <div style="font-size:11px; color:#1a73e8">${inv.vendor}</div>
+                                <div style="font-size:11px">
+                                    <input type="checkbox" ${inv.steps[0]?'checked':''} onclick="toggleStep(${bIdx},${iIdx},0)"> Created
+                                    <input type="checkbox" ${inv.steps[1]?'checked':''} onclick="toggleStep(${bIdx},${iIdx},1)"> Sent
+                                    <input type="checkbox" ${inv.steps[2]?'checked':''} onclick="toggleStep(${bIdx},${iIdx},2)"> Appr
+                                </div>
+                                <div class="${inv.amount >= 0 ? 'amt-pos' : 'amt-neg'}">
+                                    $${inv.amount.toLocaleString()}
+                                    <div style="font-size:10px; color:${dateMismatch ? 'red' : '#999'}; font-weight:normal">
+                                        VD: ${inv.invDue} ${dateMismatch ? '(!)' : ''}
+                                        ${inv.receiptMonth ? ' | M: ' + inv.receiptMonth : ''}
+                                    </div>
+                                </div>
+                                <button class="del-small" onclick="confirmDeleteInv(${bIdx}, ${iIdx})">✕</button>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+        });
+    }
+
+    // Helper functions (same as v8.3)
+    function confirmDeleteBatch(idx) { if(confirm("Delete entire batch?")) { state.batches.splice(idx,1); saveAndRender(); } }
+    function confirmDeleteInv(bIdx, iIdx) { if(confirm("Delete invoice?")) { state.batches[bIdx].invoices.splice(iIdx,1); saveAndRender(); } }
+    function toggleStep(bIdx, iIdx, sIdx) { state.batches[bIdx].invoices[iIdx].steps[sIdx] = !state.batches[bIdx].invoices[iIdx].steps[sIdx]; saveAndRender(); }
+    function loadSettings() {
+        document.getElementById('thresholdSetting').value = state.threshold;
+        document.getElementById('catAName').value = state.config.catA;
+        document.getElementById('catBName').value = state.config.catB;
+        document.getElementById('catCName').value = state.config.catC;
+        document.getElementById('typePayName').value = state.config.typePay;
+        document.getElementById('typeRecName').value = state.config.typeRec;
+        let t = ""; for(let k in state.entityMap) t += k + ":" + state.entityMap[k] + "\n";
+        document.getElementById('entityRules').value = t.trim();
+    }
+    function saveSettings() {
+        state.threshold = parseFloat(document.getElementById('thresholdSetting').value);
+        state.config.catA = document.getElementById('catAName').value;
+        state.config.catB = document.getElementById('catBName').value;
+        state.config.catC = document.getElementById('catCName').value;
+        state.config.typePay = document.getElementById('typePayName').value;
+        state.config.typeRec = document.getElementById('typeRecName').value;
+        const r = document.getElementById('entityRules').value.split("\n");
+        state.entityMap = {};
+        r.forEach(l => { const p = l.split(":"); if(p.length===2) state.entityMap[p[0].trim()] = p[1].trim(); });
+        saveAndRender();
+        alert("Settings Saved!");
+    }
+    saveAndRender();
+</script>
+</body>
+</html>
