@@ -1,176 +1,341 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice Auto-Aggregator v7</title>
+    <title>Invoice Audit Pro v9.2</title>
     <style>
-        :root { --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; }
-        body { font-family: "Segoe UI", system-ui; background: #f0f2f5; padding: 20px; color: #333; }
-        .container { max-width: 1100px; margin: auto; }
+        :root { 
+            --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; --text: #2c3e50;
+            --global-fs: 18px; --border-size: 2px; --card-padding: 30px; --ui-width: 1350px;
+        }
+        body { font-family: 'Segoe UI', system-ui; background: #f0f3f6; margin: 0; padding: 20px; color: var(--text); font-size: var(--global-fs); }
+        .container { width: var(--ui-width); margin: auto; position: relative; }
         
-        /* 预警通知 */
-        .alert-item { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; padding: 12px 20px; border-radius: 8px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; border-left: 5px solid #ff4d4f; }
-        .alert-item.is-muted { background: #f5f5f5; border-color: #d9d9d9; color: #8c8c8c; opacity: 0.6; border-left-color: #bfbfbf; }
+        .resizer-bar { position: fixed; right: 0; top: 0; width: 10px; height: 100vh; background: #ddd; cursor: ew-resize; opacity: 0.3; z-index: 10000; }
+        .resizer-bar:hover { opacity: 1; background: var(--primary); }
 
-        /* 输入面板 */
-        .panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px; }
-        .input-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        h3 { margin-top: 0; color: var(--primary); font-size: 16px; grid-column: span 3; border-bottom: 1px solid #eee; padding-bottom: 8px; }
-        input, select { padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 13px; }
-        .btn { padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-
-        /* 内部文件卡片 */
-        .doc-group { background: white; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-top: 4px solid #999; overflow: hidden; }
-        .doc-header { padding: 15px 20px; background: #fafafa; display: grid; grid-template-columns: 1fr auto; align-items: center; border-bottom: 1px solid #eee; }
-        .doc-info { display: flex; flex-direction: column; gap: 5px; }
-        .mismatch-tip { color: var(--warning); font-weight: bold; cursor: help; margin-left: 10px; padding: 2px 6px; background: #fffbe6; border-radius: 4px; border: 1px solid #ffe58f; }
+        .nav-bar { display: flex; gap: 30px; margin-bottom: 30px; border-bottom: var(--border-size) solid #cbd5e0; padding-bottom: 15px; }
+        .nav-link { cursor: pointer; font-weight: bold; color: #94a3b8; transition: 0.2s; }
+        .nav-link.active { color: var(--primary); border-bottom: var(--border-size) solid var(--primary); }
         
-        /* 发票条目 */
-        .inv-item { padding: 12px 20px; display: grid; grid-template-columns: 1fr 180px 150px 40px; gap: 15px; border-bottom: 1px solid #f0f0f0; align-items: center; font-size: 13px; }
-        .status-col { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
-        .amt-val { font-family: 'Consolas', monospace; font-weight: bold; text-align: right; }
-        .comment-box { width: 100%; margin-top: 5px; height: 32px; font-size: 11px; background: #fffbe6; border: 1px solid #eee; padding: 4px; border-radius: 4px; }
-        .completed { opacity: 0.5; filter: grayscale(1); }
+        .panel { background: white; padding: var(--card-padding); border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 30px; border: var(--border-size) solid #e2e8f0; }
+        .init-grid { display: grid; grid-template-columns: 180px 1fr 1fr 1fr 1fr auto; gap: 15px; align-items: end; }
+        input, select, button, textarea { padding: 12px; border: var(--border-size) solid #cbd5e0; border-radius: 8px; font-size: inherit; width: 100%; box-sizing: border-box; }
+        .btn-action { background: var(--primary); color: white; border: none; cursor: pointer; font-weight: bold; }
+        
+        .batch-card { background: white; border-radius: 16px; margin-bottom: 35px; border-top: 8px solid #64748b; border: var(--border-size) solid #e2e8f0; box-shadow: 0 10px 15px rgba(0,0,0,0.05); }
+        .batch-card.is-posted { opacity: 0.6; filter: grayscale(0.5); }
+        .batch-header { padding: 20px 25px; background: #f8fafc; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: var(--border-size) solid #e2e8f0; border-radius: 16px 16px 0 0; }
+        
+        .inv-row { display: grid; grid-template-columns: 100px 160px 220px 200px 420px 1fr 50px; gap: 15px; padding: 18px 25px; border-bottom: var(--border-size) solid #f1f5f9; align-items: center; }
+        .editable { cursor: pointer; border-bottom: 1px dashed #94a3b8; padding: 2px 4px; }
+        .editable:hover { background: #eff6ff; color: var(--primary); }
+        
+        .steps { display: flex; flex-direction: column; gap: 6px; font-size: 0.8em; font-weight: bold; color: #64748b; }
+        .steps label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .steps input { width: 18px; height: 18px; }
+
+        .amt-display { text-align: right; font-family: 'Consolas', monospace; font-weight: bold; }
+        .badge { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-left: 10px; color: white; }
+        .comment-box { width: 100%; margin-top: 10px; background: #fff; border: 1px dashed #cbd5e0; padding: 10px; font-style: italic; border-radius: 6px; }
+        .alert-box { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 15px; border-radius: 12px; margin-bottom: 15px; border-left: 8px solid var(--urgent); font-weight: bold; }
+        .hidden { display: none; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div id="alert-zone"></div>
+<div id="resizer" class="resizer-bar"></div>
 
-    <div class="panel">
-        <div class="input-grid">
-            <h3>📂 创建空内部文件 (New Internal Batch)</h3>
-            <input type="text" id="docId" placeholder="内部文件编号 (如: BATCH-0429-01)">
-            <select id="docType">
-                <option value="付款">预期类型: 付款 (Payment)</option>
-                <option value="收款">预期类型: 收款 (Receipt)</option>
-            </select>
-            <input type="date" id="docDueDate">
-            <button class="btn" style="grid-column: span 3; background: var(--primary); color: white;" onclick="createDoc()">创建容器</button>
-        </div>
+<div class="container" id="main-container">
+    <div class="nav-bar">
+        <span id="nav-main" class="nav-link active" onclick="route('main')">DASHBOARD</span>
+        <span id="nav-settings" class="nav-link" onclick="route('settings')">SETTINGS & STYLER</span>
     </div>
 
-    <div id="list"></div>
+    <div id="global-alerts"></div>
+
+    <div id="page-main">
+        <div class="panel">
+            <div class="init-grid">
+                <div><label>Batch ID</label><div style="display:flex; align-items:center; background:#edf2f7; border-radius:8px; border:var(--border-size) solid #cbd5e0; overflow:hidden;"><span style="padding:0 12px; font-weight:bold">OL</span><input type="text" id="in-id" placeholder="0000" style="border:none; background:transparent"></div></div>
+                <div><label>Category</label><select id="in-cat" onchange="checkB()"></select></div>
+                <div><label>Type (I/E)</label><select id="in-type"></select></div>
+                <div><label>Period</label><input type="month" id="in-period"></div>
+                <div><label>Value Date</label><input type="date" id="in-due"></div>
+                <button class="btn-action" onclick="initBatch()">INITIALIZE</button>
+            </div>
+        </div>
+        <div id="draw-list"></div>
+    </div>
+
+    <div id="page-settings" class="hidden">
+        <div class="panel">
+            <h3>🎨 VISUAL STYLER</h3>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:20px;">
+                <div><label>Font Size (px)</label><input type="number" id="st-fs" onchange="syncUI()"></div>
+                <div><label>Border Weight (px)</label><input type="number" id="st-bs" onchange="syncUI()"></div>
+                <div><label>Width (px)</label><input type="number" id="st-wd" onchange="syncUI()"></div>
+            </div>
+        </div>
+        <div class="panel">
+            <h3>⚙️ SYSTEM CONFIG</h3>
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
+                <div><label>Threshold</label><input type="number" id="cfg-threshold"></div>
+                <div><label>Cat Names</label><input type="text" id="cfg-catA"><input type="text" id="cfg-catB"><input type="text" id="cfg-catC"></div>
+                <div><label>Type Labels</label><input type="text" id="cfg-typeP"><input type="text" id="cfg-typeR"></div>
+            </div>
+            <label>Entity Rules (ABC:Company Name)</label>
+            <textarea id="cfg-rules" style="width:100%; height:150px; font-family:monospace; margin-top:10px;"></textarea>
+            <button class="btn-action" onclick="saveSettings()">SAVE SETTINGS</button>
+        </div>
+    </div>
 </div>
 
 <script>
-    let documents = JSON.parse(localStorage.getItem('vibe_docs_v7')) || [];
-    let threshold = localStorage.getItem('vibe_threshold') || 10000;
-    let mutedAlerts = JSON.parse(localStorage.getItem('vibe_muted_alerts')) || [];
+    // --- Data Management ---
+    let app = {
+        batches: JSON.parse(localStorage.getItem('aud_v92_batches')) || [],
+        threshold: parseFloat(localStorage.getItem('aud_v92_threshold')) || 10000,
+        config: JSON.parse(localStorage.getItem('aud_v92_config')) || { catA:"HK", catB:"Cycle", catC:"Admin", typeP:"Payment", typeR:"Receipt" },
+        styles: JSON.parse(localStorage.getItem('aud_v92_styles')) || { fs: 18, bs: 2, wd: 1350 },
+        entities: JSON.parse(localStorage.getItem('aud_v92_entities')) || {"ABC": "Example Co"}
+    };
 
-    function createDoc() {
-        const id = document.getElementById('docId').value;
-        const date = document.getElementById('docDueDate').value;
-        if(!id || !date) return alert("请完整填写编号和截止日期");
-
-        documents.push({
-            id: Date.now(),
-            docId: id,
-            type: document.getElementById('docType').value,
-            dueDate: date,
-            invoices: []
-        });
-        saveAndRender();
+    function commit() {
+        localStorage.setItem('aud_v92_batches', JSON.stringify(app.batches));
+        localStorage.setItem('aud_v92_threshold', app.threshold);
+        localStorage.setItem('aud_v92_config', JSON.stringify(app.config));
+        localStorage.setItem('aud_v92_entities', JSON.stringify(app.entities));
+        localStorage.setItem('aud_v92_styles', JSON.stringify(app.styles));
+        render();
     }
 
-    function addInvoice(docId) {
-        const invA = prompt("发票前缀 (A):");
-        const invB = prompt("发票后缀 (B):");
-        const amt = parseFloat(prompt("金额 (支出填正, 冲销/收款填负):") || 0);
-        const vendor = prompt("供应商 (Vendor):");
-        if(!invA) return;
-
-        const idx = documents.findIndex(d => d.id === docId);
-        documents[idx].invoices.push({
-            id: Date.now(),
-            invNo: invA + "-" + invB,
-            vendor: vendor,
-            amount: amt,
-            comment: '',
-            step1: false, step2: false, step3: false
-        });
-        saveAndRender();
+    // --- Core Functions ---
+    function route(page) {
+        document.getElementById('nav-main').classList.toggle('active', page === 'main');
+        document.getElementById('nav-settings').classList.toggle('active', page === 'settings');
+        document.getElementById('page-main').classList.toggle('hidden', page !== 'main');
+        document.getElementById('page-settings').classList.toggle('hidden', page !== 'settings');
+        if(page === 'main') render();
+        else loadSettingsUI();
     }
 
-    function toggleMute(date) {
-        mutedAlerts.includes(date) ? mutedAlerts = mutedAlerts.filter(d=>d!==date) : mutedAlerts.push(date);
-        localStorage.setItem('vibe_muted_alerts', JSON.stringify(mutedAlerts));
-        saveAndRender();
+    function checkB() {
+        const cat = document.getElementById('in-cat').value;
+        const p = document.getElementById('in-period');
+        p.disabled = (cat === 'B');
+        if(p.disabled) p.value = "";
     }
 
-    function saveAndRender() {
-        documents.sort((a,b) => {
-            const aD = a.invoices.length > 0 && a.invoices.every(i => i.step1 && i.step2 && i.step3);
-            const bD = b.invoices.length > 0 && b.invoices.every(i => i.step1 && i.step2 && i.step3);
-            if(aD !== bD) return aD ? 1 : -1;
-            return new Date(a.dueDate) - new Date(b.dueDate);
+    function buildDrops() {
+        document.getElementById('in-cat').innerHTML = `<option value="A">${app.config.catA}</option><option value="B">${app.config.catB}</option><option value="C">${app.config.catC}</option>`;
+        document.getElementById('in-type').innerHTML = `<option value="Payment">${app.config.typeP}</option><option value="Receipt">${app.config.typeR}</option>`;
+        checkB();
+    }
+
+    function initBatch() {
+        const id = document.getElementById('in-id').value;
+        const cat = document.getElementById('in-cat').value;
+        const due = document.getElementById('in-due').value;
+        const period = document.getElementById('in-period').value;
+        if(!id || !due || (cat!=='B' && !period)) return alert("Incomplete Batch Info!");
+
+        const catN = cat==='A'?app.config.catA : (cat==='B'?app.config.catB:app.config.catC);
+        const typeN = document.getElementById('in-type').value === 'Payment' ? app.config.typeP : app.config.typeR;
+
+        app.batches.push({
+            uid: "b" + Date.now(),
+            idOnly: id,
+            title: `OL ${id} ${catN} ${typeN}`,
+            cat, type: document.getElementById('in-type').value, 
+            due, period,
+            invoices: [], isPosted: false, comment: ""
         });
-        localStorage.setItem('vibe_docs_v7', JSON.stringify(documents));
-        
-        // 预警逻辑：基于实时累加的付款批次总额
-        const alertZone = document.getElementById('alert-zone');
-        alertZone.innerHTML = '';
-        const dailyPay = {};
-        documents.forEach(d => {
-            const isDone = d.invoices.length > 0 && d.invoices.every(i => i.step1 && i.step2 && i.step3);
-            if(!isDone && d.type === '付款') {
-                const currentSum = d.invoices.reduce((s, i) => s + i.amount, 0);
-                dailyPay[d.dueDate] = (dailyPay[d.dueDate] || 0) + currentSum;
+        commit();
+    }
+
+    function addInv(bUid) {
+        const b = app.batches.find(x => x.uid === bUid);
+        const ent = (prompt("Entity Code:") || "").toUpperCase();
+        if(!ent) return;
+        const ctr = prompt("Ctr No:");
+        const sup = prompt("Supplier:");
+        const amt = parseFloat(prompt("Amount:") || 0);
+        const vd = prompt("Value Date:", b.due);
+        const rm = (b.cat !== 'B') ? prompt("Receipt Month (YYYY-MM):") : null;
+
+        b.invoices.push({
+            uid: "i" + Date.now() + Math.floor(Math.random()*1000),
+            entity: ent, ctr, supplier: sup, amount: amt, vd, rm,
+            steps: [false, false, false], comment: ""
+        });
+        commit();
+    }
+
+    function handleStep(bUid, iUid, stepIdx) {
+        const b = app.batches.find(x => x.uid === bUid);
+        const i = b.invoices.find(x => x.uid === iUid);
+        i.steps[stepIdx] = !i.steps[stepIdx];
+        commit();
+    }
+
+    function postBatch(bUid) {
+        const b = app.batches.find(x => x.uid === bUid);
+        if(b.isPosted) { b.isPosted = false; commit(); return; }
+        const ready = b.invoices.length > 0 && b.invoices.every(inv => inv.steps[2]);
+        if(!ready) return alert("CANNOT POST: All Approved flags must be checked!");
+        b.isPosted = true;
+        commit();
+    }
+
+    function editBatch(bUid, key, cur) {
+        const b = app.batches.find(x => x.uid === bUid);
+        if(b.isPosted) return;
+        let val = prompt(`Edit ${key}:`, cur);
+        if(val !== null) {
+            b[key] = val;
+            const catN = b.cat==='A'?app.config.catA : (b.cat==='B'?app.config.catB:app.config.catC);
+            const typeN = b.type==='Payment'?app.config.typeP:app.config.typeR;
+            b.title = `OL ${b.idOnly} ${catN} ${typeN}`;
+            commit();
+        }
+    }
+
+    function editInv(bUid, iUid, key, cur) {
+        const b = app.batches.find(x => x.uid === bUid);
+        const i = b.invoices.find(x => x.uid === iUid);
+        if(b.isPosted) return;
+        let val = prompt(`Edit ${key}:`, cur);
+        if(val !== null) {
+            if(key==='amount') val = parseFloat(val)||0;
+            i[key] = (key==='entity') ? val.toUpperCase() : val;
+            commit();
+        }
+    }
+
+    // --- Rendering ---
+    function render() {
+        app.batches.sort((a,b) => (a.isPosted === b.isPosted) ? new Date(a.due) - new Date(b.due) : (a.isPosted ? 1 : -1));
+
+        const alerts = document.getElementById('global-alerts'); alerts.innerHTML = "";
+        const daily = {};
+        app.batches.forEach(b => {
+            if(!b.isPosted && b.type === 'Payment') {
+                const bSum = b.invoices.reduce((s,i)=>s+i.amount, 0);
+                daily[b.due] = (daily[b.due] || 0) + bSum;
             }
         });
-        Object.keys(dailyPay).filter(date => dailyPay[date] > threshold).forEach(date => {
-            const muted = mutedAlerts.includes(date);
-            alertZone.innerHTML += `<div class="alert-item ${muted?'is-muted':''}">
-                <span><input type="checkbox" ${muted?'checked':''} onclick="toggleMute('${date}')"> <b>${date}</b> 付款总额超标: <b>$${dailyPay[date].toLocaleString()}</b></span>
-            </div>`;
+        Object.keys(daily).filter(d => daily[d] > app.threshold).forEach(d => {
+            alerts.innerHTML += `<div class="alert-box">⚠️ ${d}: $${daily[d].toLocaleString()} exceeds threshold!</div>`;
         });
 
-        const list = document.getElementById('list');
-        list.innerHTML = '';
-        documents.forEach(doc => {
-            const currentSum = doc.invoices.reduce((s, i) => s + i.amount, 0);
-            const isDone = doc.invoices.length > 0 && doc.invoices.every(i => i.step1 && i.step2 && i.step3);
-            
-            // 校验逻辑：累加值与预期类型是否冲突
-            // 付款预期下，累加值不应为负；收款预期下，累加值不应为正
-            const typeMismatch = (doc.type === '付款' && currentSum < 0) || (doc.type === '收款' && currentSum > 0);
+        const list = document.getElementById('draw-list'); list.innerHTML = "";
+        const tmr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
-            list.innerHTML += `
-                <div class="doc-group ${isDone?'completed':''}">
-                    <div class="doc-header">
-                        <div class="doc-info">
-                            <span class="doc-title">${doc.docId} <small>(${doc.type})</small></span>
-                            <span style="font-size:12px; color:#666">
-                                实时合计 (Net Sum): <b style="color:${currentSum >= 0 ? '#cf1322' : '#389e0d'}">$${currentSum.toLocaleString()}</b>
-                                ${typeMismatch ? `<span class="mismatch-tip" title="警告：净额方向与设定类型不符">❓ Type Mismatch</span>` : ''}
-                            </span>
-                        </div>
-                        <div>
-                            <button class="btn" style="background:#f0f0f0" onclick="addInvoice(${doc.id})">+ Add Invoice</button>
-                            <button class="btn" style="color:red" onclick="if(confirm('Delete Batch?')){documents=documents.filter(d=>d.id!==${doc.id});saveAndRender()}">✕</button>
-                        </div>
+        app.batches.forEach(b => {
+            const sum = b.invoices.reduce((s,i)=>s+i.amount, 0);
+            const vdM = b.invoices.some(i => i.vd !== b.due);
+            
+            let html = `
+            <div class="batch-card ${b.isPosted?'is-posted':''}" style="border-top-color: ${b.isPosted?'#ccc':(b.type==='Payment'?'#cf1322':'#389e0d')}">
+                <div class="batch-header">
+                    <div>
+                        <strong class="editable" onclick="editBatch('${b.uid}','idOnly','${b.idOnly}')">${b.title}</strong>
+                        ${vdM ? '<span class="badge" style="background:var(--warning)">VD MISMATCH</span>' : ''}
+                        ${b.due === tmr && !b.isPosted ? '<span class="badge" style="background:var(--urgent)">DUE TOMORROW</span>' : ''}
+                        <div style="font-size:0.8em; color:#64748b; margin-top:5px;">Due: ${b.due} | Period: ${b.period || 'N/A'}</div>
+                        <textarea class="comment-box" onchange="app.batches.find(x=>x.uid==='${b.uid}').comment=this.value; commit()" placeholder="Batch Notes...">${b.comment || ''}</textarea>
                     </div>
-                    ${doc.invoices.map(inv => `
-                        <div class="inv-item">
-                            <div>
-                                <b>${inv.invNo}</b> <span style="font-size:11px; color:var(--primary)">[${inv.vendor || 'N/A'}]</span>
-                                <textarea class="comment-box" onchange="const dIdx=documents.findIndex(d=>d.id===${doc.id}); const iIdx=documents[dIdx].invoices.findIndex(i=>i.id===${inv.id}); documents[dIdx].invoices[iIdx].comment=this.value; localStorage.setItem('vibe_docs_v7', JSON.stringify(documents));" placeholder="Comment...">${inv.comment}</textarea>
-                            </div>
-                            <div class="status-col">
-                                <label><input type="checkbox" ${inv.step1?'checked':''} onclick="const dIdx=documents.findIndex(d=>d.id===${doc.id}); const iIdx=documents[dIdx].invoices.findIndex(i=>i.id===${inv.id}); documents[dIdx].invoices[iIdx].step1=!documents[dIdx].invoices[iIdx].step1; saveAndRender();"> Created</label>
-                                <label><input type="checkbox" ${inv.step2?'checked':''} onclick="const dIdx=documents.findIndex(d=>d.id===${doc.id}); const iIdx=documents[dIdx].invoices.findIndex(i=>i.id===${inv.id}); documents[dIdx].invoices[iIdx].step2=!documents[dIdx].invoices[iIdx].step2; saveAndRender();"> Sent</label>
-                                <label><input type="checkbox" ${inv.step3?'checked':''} onclick="const dIdx=documents.findIndex(d=>d.id===${doc.id}); const iIdx=documents[dIdx].invoices.findIndex(i=>i.id===${inv.id}); documents[dIdx].invoices[iIdx].step3=!documents[dIdx].invoices[iIdx].step3; saveAndRender();"> Approved</label>
-                            </div>
-                            <div class="amt-val" style="color:${inv.amount >= 0 ? '#cf1322' : '#389e0d'}">$${inv.amount.toLocaleString()}</div>
-                            <button class="btn" style="background:none; color:#ccc" onclick="const dIdx=documents.findIndex(d=>d.id===${doc.id}); documents[dIdx].invoices=documents[dIdx].invoices.filter(i=>i.id!==${inv.id}); saveAndRender();">✕</button>
+                    <div style="text-align:right">
+                        <div class="amt-display" style="font-size:1.4em">$${sum.toLocaleString()}</div>
+                        <div style="margin: 15px 0;">
+                            <button class="btn-action" style="width:auto; padding:10px 20px" onclick="addInv('${b.uid}')" ${b.isPosted?'disabled':''}>Add Invoice</button>
+                            <button class="btn-action" style="width:auto; padding:10px 20px; background:${b.isPosted?'#64748b':'#0f172a'}; margin-left:10px" onclick="postBatch('${b.uid}')">${b.isPosted?'RELEASE':'POST BATCH'}</button>
                         </div>
-                    `).join('')}
+                        <button style="border:none; background:none; color:#94a3b8; cursor:pointer; font-size:12px" onclick="if(confirm('Delete Batch?')){app.batches=app.batches.filter(x=>x.uid!=='${b.uid}');commit()}">Delete Batch</button>
+                    </div>
                 </div>
-            `;
+                <div>`;
+
+            b.invoices.forEach(i => {
+                const iVdM = i.vd !== b.due;
+                const vN = app.entities[i.entity] || `Unmapped (${i.entity})`;
+                html += `
+                <div class="inv-row" style="${iVdM ? 'background:#fffbeb;' : ''}">
+                    <div class="font-sync editable" onclick="editInv('${b.uid}','${i.uid}','entity','${i.entity}')">${i.entity}</div>
+                    <div class="font-sync editable" onclick="editInv('${b.uid}','${i.uid}','ctr','${i.ctr}')">${i.ctr}</div>
+                    <div class="editable" style="font-weight:bold" onclick="editInv('${b.uid}','${i.uid}','supplier','${i.supplier}')">${i.supplier}
+                        <textarea class="comment-box" style="font-size:11px; min-height:30px" onchange="app.batches.find(x=>x.uid==='${b.uid}').invoices.find(y=>y.uid==='${i.uid}').comment=this.value; commit()" placeholder="Notes...">${i.comment || ''}</textarea>
+                    </div>
+                    <div style="font-size:0.8em; color:var(--primary); font-weight:600">${vN}</div>
+                    <div class="steps">
+                        <label><input type="checkbox" ${i.steps[0]?'checked':''} onclick="handleStep('${b.uid}','${i.uid}',0)" ${b.isPosted?'disabled':''}> Created</label>
+                        <label><input type="checkbox" ${i.steps[1]?'checked':''} onclick="handleStep('${b.uid}','${i.uid}',1)" ${b.isPosted?'disabled':''}> Sent</label>
+                        <label><input type="checkbox" ${i.steps[2]?'checked':''} onclick="handleStep('${b.uid}','${i.uid}',2)" ${b.isPosted?'disabled':''}> Approved</label>
+                    </div>
+                    <div class="amt-display ${i.amount>=0?'amt-pos':'amt-neg'}" onclick="editInv('${b.uid}','${i.uid}','amount','${i.amount}')">
+                        $${i.amount.toLocaleString()}
+                        <div style="font-size:0.7em; color:${iVdM?'#b91c1c':'#64748b'}; font-weight:normal">VD: ${i.vd} ${i.rm?'| M: '+i.rm:''}</div>
+                    </div>
+                    <button style="border:none; background:none; color:#cbd5e0; cursor:pointer; font-size:20px" onclick="if(confirm('Delete Inv?')){const b=app.batches.find(x=>x.uid==='${b.uid}'); b.invoices=b.invoices.filter(y=>y.uid!=='${i.uid}'); commit()}">✕</button>
+                </div>`;
+            });
+            html += `</div></div>`;
+            list.innerHTML += html;
         });
     }
-    saveAndRender();
+
+    // --- UI & Styler ---
+    function loadSettingsUI() {
+        document.getElementById('st-fs').value = app.styles.fs;
+        document.getElementById('st-bs').value = app.styles.bs;
+        document.getElementById('st-wd').value = app.styles.wd;
+        document.getElementById('cfg-threshold').value = app.threshold;
+        document.getElementById('cfg-catA').value = app.config.catA;
+        document.getElementById('cfg-catB').value = app.config.catB;
+        document.getElementById('cfg-catC').value = app.config.catC;
+        document.getElementById('cfg-typeP').value = app.config.typeP;
+        document.getElementById('cfg-typeR').value = app.config.typeR;
+        let t = ""; for(let k in app.entities) t += `${k}:${app.entities[k]}\n`;
+        document.getElementById('cfg-rules').value = t.trim();
+    }
+
+    function saveSettings() {
+        app.threshold = parseFloat(document.getElementById('cfg-threshold').value);
+        app.config = { catA: document.getElementById('cfg-catA').value, catB: document.getElementById('cfg-catB').value, catC: document.getElementById('cfg-catC').value, typeP: document.getElementById('cfg-typeP').value, typeR: document.getElementById('cfg-typeR').value };
+        const rules = document.getElementById('cfg-rules').value.split('\n');
+        app.entities = {};
+        rules.forEach(l => { const p = l.split(':'); if(p.length===2) app.entities[p[0].trim().toUpperCase()] = p[1].trim(); });
+        app.styles = { fs: document.getElementById('st-fs').value, bs: document.getElementById('st-bs').value, wd: document.getElementById('st-wd').value };
+        syncUI(); commit();
+        alert("Settings Saved.");
+        route('main');
+    }
+
+    function syncUI() {
+        const r = document.documentElement;
+        r.style.setProperty('--global-fs', app.styles.fs + 'px');
+        r.style.setProperty('--border-size', app.styles.bs + 'px');
+        r.style.setProperty('--ui-width', app.styles.wd + 'px');
+    }
+
+    // --- Resizer ---
+    const handle = document.getElementById('resizer');
+    let isDragging = false;
+    handle.addEventListener('mousedown', () => { isDragging = true; document.body.style.cursor = 'ew-resize'; });
+    window.addEventListener('mousemove', (e) => {
+        if(!isDragging) return;
+        const nW = e.clientX * 2;
+        if(nW > 800) {
+            app.styles.wd = nW;
+            document.documentElement.style.setProperty('--ui-width', nW + 'px');
+        }
+    });
+    window.addEventListener('mouseup', () => { if(isDragging) { isDragging = false; document.body.style.cursor = 'default'; commit(); } });
+
+    // --- Init ---
+    syncUI(); buildDrops(); render();
+    console.log("Invoice Pro v9.2 Ready.");
 </script>
 </body>
 </html>
