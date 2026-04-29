@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice Audit Pro v9.6 (Safe Boot)</title>
-    <style id="styler-vars">
+    <title>Invoice Audit Pro v9.5 - Stable</title>
+    <style>
         :root { 
             --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; --text: #2c3e50;
             --global-fs: 18px; --border-size: 2px; --card-padding: 30px; --ui-width: 1350px;
@@ -11,14 +11,17 @@
         body { font-family: 'Segoe UI', system-ui; background: #f0f3f6; margin: 0; padding: 20px; color: var(--text); font-size: var(--global-fs); margin-bottom: 120px; }
         .container { width: var(--ui-width); margin: auto; position: relative; }
         
-        .resizer-bar { position: fixed; right: 0; top: 0; width: 12px; height: 100vh; background: #ddd; cursor: ew-resize; opacity: 0.3; z-index: 10000; }
+        .resizer-bar { position: fixed; right: 0; top: 0; width: 10px; height: 100vh; background: #ddd; cursor: ew-resize; opacity: 0.3; z-index: 10000; }
         .resizer-bar:hover { opacity: 1; background: var(--primary); }
 
         .nav-bar { display: flex; gap: 30px; margin-bottom: 30px; border-bottom: var(--border-size) solid #cbd5e0; padding-bottom: 15px; align-items: center; }
         .nav-link { cursor: pointer; font-weight: bold; color: #94a3b8; transition: 0.2s; }
         .nav-link.active { color: var(--primary); border-bottom: var(--border-size) solid var(--primary); }
+        
+        /* 顶部挂件 */
         .live-stat { margin-left: auto; font-size: 0.85em; background: #e2e8f0; padding: 6px 16px; border-radius: 20px; font-weight: bold; color: #475569; }
 
+        /* 右下角趣味计分板 */
         .scoreboard { position: fixed; bottom: 25px; right: 25px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: var(--border-size) solid #e2e8f0; border-radius: 16px; padding: 18px 25px; box-shadow: 0 12px 40px rgba(0,0,0,0.12); z-index: 9999; display: flex; gap: 30px; border-left: 8px solid var(--primary); }
         .score-item { display: flex; flex-direction: column; }
         .score-label { font-size: 11px; font-weight: bold; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
@@ -31,7 +34,7 @@
         
         .batch-card { background: white; border-radius: 16px; margin-bottom: 35px; border-top: 8px solid #64748b; border: var(--border-size) solid #e2e8f0; box-shadow: 0 10px 15px rgba(0,0,0,0.05); }
         .batch-card.is-posted { opacity: 0.6; filter: grayscale(0.5); }
-        .batch-header { padding: 22px 25px; background: #f8fafc; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: var(--border-size) solid #e2e8f0; border-radius: 16px 16px 0 0; }
+        .batch-header { padding: 20px 25px; background: #f8fafc; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: var(--border-size) solid #e2e8f0; border-radius: 16px 16px 0 0; }
         
         .inv-row { display: grid; grid-template-columns: 100px 160px 220px 200px 420px 1fr 50px; gap: 15px; padding: 18px 25px; border-bottom: var(--border-size) solid #f1f5f9; align-items: center; }
         .editable { cursor: pointer; border-bottom: 1px dashed #94a3b8; padding: 2px 4px; }
@@ -43,11 +46,10 @@
 
         .amt-display { text-align: right; font-family: 'Consolas', monospace; font-weight: bold; }
         .badge { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; margin-left: 10px; color: white; }
+        .comment-box { width: 100%; margin-top: 10px; background: #fff; border: 1px dashed #cbd5e0; padding: 10px; font-style: italic; border-radius: 6px; }
         
         .alert-box { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; padding: 15px; border-radius: 12px; margin-bottom: 15px; border-left: 8px solid var(--urgent); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
         .btn-dismiss { background: #fff; border: 1px solid #fecaca; color: #b91c1c; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: bold; }
-        .comment-box { width: 100%; margin-top: 10px; background: #fff; border: 1px dashed #cbd5e0; padding: 10px; font-style: italic; border-radius: 6px; resize: vertical; }
-
         .hidden { display: none; }
     </style>
 </head>
@@ -73,8 +75,8 @@
 <div class="container" id="main-container">
     <div class="nav-bar">
         <span id="nav-main" class="nav-link active" onclick="route('main')">DASHBOARD</span>
-        <span id="nav-settings" class="nav-link" onclick="route('settings')">SETTINGS</span>
-        <div id="live-stat" class="live-stat">Today's VD Pending: $0</div>
+        <span id="nav-settings" class="nav-link" onclick="route('settings')">SETTINGS & STYLER</span>
+        <div id="live-stat" class="live-stat">VD Pending: $0</div>
     </div>
 
     <div id="global-alerts"></div>
@@ -90,7 +92,7 @@
                 <button class="btn-action" onclick="initBatch()">INITIALIZE</button>
             </div>
         </div>
-        <div id="batch-render-list"></div>
+        <div id="draw-list"></div>
     </div>
 
     <div id="page-settings" class="hidden">
@@ -106,221 +108,226 @@
             <h3>⚙️ SYSTEM CONFIG</h3>
             <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:15px; margin-bottom:20px;">
                 <div><label>Threshold</label><input type="number" id="cfg-threshold"></div>
-                <div><label>Cat Names</label>
-                    <div style="display:flex; gap:5px;"><input type="text" id="cfg-catA" placeholder="A"><input type="text" id="cfg-catB" placeholder="B"><input type="text" id="cfg-catC" placeholder="C"></div>
-                </div>
-                <div><label>Type Labels</label>
-                    <div style="display:flex; gap:5px;"><input type="text" id="cfg-typeP"><input type="text" id="cfg-typeR"></div>
-                </div>
+                <div><label>Cat Names</label><input type="text" id="cfg-catA"><input type="text" id="cfg-catB"><input type="text" id="cfg-catC"></div>
+                <div><label>Type Labels</label><input type="text" id="cfg-typeP"><input type="text" id="cfg-typeR"></div>
             </div>
             <label>Entity Rules (ABC:Company Name)</label>
             <textarea id="cfg-rules" style="width:100%; height:150px; font-family:monospace; margin-top:10px;"></textarea>
-            <button class="btn-action" onclick="saveSettings()" style="margin-top:20px">SAVE SETTINGS</button>
+            <button class="btn-action" onclick="saveSettings()">SAVE SETTINGS</button>
         </div>
     </div>
 </div>
 
 <script>
-    // --- Safe Storage Wrapper (防崩溃装甲) ---
-    const Store = {
-        get: function(key, def) {
-            try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; }
-            catch(e) { console.warn("Storage Read Blocked by IT Policy"); return def; }
-        },
-        set: function(key, val) {
-            try { localStorage.setItem(key, JSON.stringify(val)); }
-            catch(e) { console.warn("Storage Write Blocked by IT Policy"); }
-        }
-    };
-
+    // --- Data Management (Linked to 9.2 Keys) ---
     let app = {
-        batches: Store.get('aud_v96_batches', []),
-        threshold: parseFloat(Store.get('aud_v96_threshold', 10000)) || 10000,
-        config: Store.get('aud_v96_config', { catA:"HK", catB:"Cycle", catC:"Admin", typeP:"Payment", typeR:"Receipt" }),
-        styles: Store.get('aud_v96_styles', { fs: 18, bs: 2, wd: 1350 }),
-        entities: Store.get('aud_v96_entities', {"ABC": "Example Co"}),
-        dismissed: Store.get('aud_v96_dismissed', [])
+        batches: JSON.parse(localStorage.getItem('aud_v92_batches')) || [],
+        threshold: parseFloat(localStorage.getItem('aud_v92_threshold')) || 10000,
+        config: JSON.parse(localStorage.getItem('aud_v92_config')) || { catA:"HK", catB:"Cycle", catC:"Admin", typeP:"Payment", typeR:"Receipt" },
+        styles: JSON.parse(localStorage.getItem('aud_v92_styles')) || { fs: 18, bs: 2, wd: 1350 },
+        entities: JSON.parse(localStorage.getItem('aud_v92_entities')) || {"ABC": "Example Co"},
+        dismissed: JSON.parse(localStorage.getItem('aud_v95_dismissed')) || []
     };
 
     function commit() {
-        try {
-            Store.set('aud_v96_batches', app.batches);
-            Store.set('aud_v96_threshold', app.threshold);
-            Store.set('aud_v96_config', app.config);
-            Store.set('aud_v96_entities', app.entities);
-            Store.set('aud_v96_styles', app.styles);
-            Store.set('aud_v96_dismissed', app.dismissed);
-        } catch(e) {
-            // Silently fail if storage is completely locked out
-        }
+        localStorage.setItem('aud_v92_batches', JSON.stringify(app.batches));
+        localStorage.setItem('aud_v92_threshold', app.threshold);
+        localStorage.setItem('aud_v92_config', JSON.stringify(app.config));
+        localStorage.setItem('aud_v92_entities', JSON.stringify(app.entities));
+        localStorage.setItem('aud_v92_styles', JSON.stringify(app.styles));
+        localStorage.setItem('aud_v95_dismissed', JSON.stringify(app.dismissed));
         render();
     }
 
-    // --- Core Logic ---
-    function route(p) {
-        document.getElementById('nav-main').classList.toggle('active', p==='main');
-        document.getElementById('nav-settings').classList.toggle('active', p==='settings');
-        document.getElementById('page-main').classList.toggle('hidden', p!=='main');
-        document.getElementById('page-settings').classList.toggle('hidden', p!=='settings');
-        if(p==='main') render(); else loadSettingsUI();
+    // --- Core Functions ---
+    function route(page) {
+        document.getElementById('nav-main').classList.toggle('active', page === 'main');
+        document.getElementById('nav-settings').classList.toggle('active', page === 'settings');
+        document.getElementById('page-main').classList.toggle('hidden', page !== 'main');
+        document.getElementById('page-settings').classList.toggle('hidden', page !== 'settings');
+        if(page === 'main') render();
+        else loadSettingsUI();
     }
 
-    function isPast(d) { const today = new Date(); today.setHours(0,0,0,0); return new Date(d + "T00:00:00") < today; }
+    function isPast(d) {
+        const today = new Date(); today.setHours(0,0,0,0);
+        return new Date(d + "T00:00:00") < today;
+    }
 
     function checkB() {
-        const c = document.getElementById('in-cat').value;
+        const cat = document.getElementById('in-cat').value;
         const p = document.getElementById('in-period');
-        if(p) { p.disabled = (c==='B'); if(p.disabled) p.value=""; }
+        p.disabled = (cat === 'B');
+        if(p.disabled) p.value = "";
     }
 
     function buildDrops() {
-        const catSel = document.getElementById('in-cat');
-        const typeSel = document.getElementById('in-type');
-        const perInp = document.getElementById('in-period');
-        if(catSel && typeSel && perInp) {
-            catSel.innerHTML = `<option value="A">${app.config.catA}</option><option value="B">${app.config.catB}</option><option value="C">${app.config.catC}</option>`;
-            typeSel.innerHTML = `<option value="Payment">${app.config.typeP}</option><option value="Receipt">${app.config.typeR}</option>`;
-            perInp.min = new Date().toISOString().substring(0, 7);
-            checkB();
-        }
+        document.getElementById('in-cat').innerHTML = `<option value="A">${app.config.catA}</option><option value="B">${app.config.catB}</option><option value="C">${app.config.catC}</option>`;
+        document.getElementById('in-type').innerHTML = `<option value="Payment">${app.config.typeP}</option><option value="Receipt">${app.config.typeR}</option>`;
+        // Gadget: restrict period to current month min
+        document.getElementById('in-period').min = new Date().toISOString().substring(0, 7);
+        checkB();
     }
 
     function initBatch() {
         const id = document.getElementById('in-id').value;
         const cat = document.getElementById('in-cat').value;
-        const type = document.getElementById('in-type').value;
         const due = document.getElementById('in-due').value;
-        const per = document.getElementById('in-period').value;
-        if(!id || !due || (cat!=='B' && !per)) return alert("Missing Data");
-        if(isPast(due) && !confirm("Past Date Warning: Continue?")) return;
+        const period = document.getElementById('in-period').value;
+        if(!id || !due || (cat!=='B' && !period)) return alert("Incomplete Batch Info!");
+        if(isPast(due) && !confirm("Warning: Value Date is in the past. Confirm?")) return;
+
+        const catN = cat==='A'?app.config.catA : (cat==='B'?app.config.catB:app.config.catC);
+        const typeN = document.getElementById('in-type').value === 'Payment' ? app.config.typeP : app.config.typeR;
 
         app.batches.push({
-            uid: "b"+Date.now(), idOnly: id,
-            title: `OL ${id} ${cat==='A'?app.config.catA:(cat==='B'?app.config.catB:app.config.catC)} ${type==='Payment'?app.config.typeP:app.config.typeR}`,
-            cat, type, due, period: per,
+            uid: "b" + Date.now(),
+            idOnly: id,
+            title: `OL ${id} ${catN} ${typeN}`,
+            cat, type: document.getElementById('in-type').value, 
+            due, period,
             invoices: [], isPosted: false, comment: ""
         });
         commit();
     }
 
     function addInv(bUid) {
-        const b = app.batches.find(x=>x.uid===bUid);
-        if(b.isPosted) return;
-        const ent = (prompt("Entity Code:")||"").toUpperCase(); if(!ent) return;
-        const ctr = prompt("Ctr No:"); const sup = prompt("Supplier:");
-        const amt = parseFloat(prompt("Amount:")||0); const vd = prompt("Value Date:", b.due);
-        if(vd && isPast(vd) && !confirm("Past Date Warning: Continue?")) return;
-        const rm = (b.cat!=='B')?prompt("Receipt Month (YYYY-MM):"):null;
-        b.invoices.push({ uid:"i"+Date.now()+Math.floor(Math.random()*1000), entity:ent, ctr, supplier:sup, amount:amt, vd, rm, steps:[false,false,false], comment:"" });
+        const b = app.batches.find(x => x.uid === bUid);
+        const ent = (prompt("Entity Code:") || "").toUpperCase();
+        if(!ent) return;
+        const ctr = prompt("Ctr No:");
+        const sup = prompt("Supplier:");
+        const amt = parseFloat(prompt("Amount:") || 0);
+        const vd = prompt("Value Date:", b.due);
+        if(vd && isPast(vd) && !confirm("Invoice Date is in the past. Proceed?")) return;
+        const rm = (b.cat !== 'B') ? prompt("Receipt Month (YYYY-MM):") : null;
+
+        b.invoices.push({
+            uid: "i" + Date.now() + Math.floor(Math.random()*1000),
+            entity: ent, ctr, supplier: sup, amount: amt, vd, rm,
+            steps: [false, false, false], comment: ""
+        });
         commit();
     }
 
-    function toggleStep(bUid, iUid, idx) {
-        const b = app.batches.find(x=>x.uid===bUid);
-        const i = b.invoices.find(y=>y.uid===iUid);
-        if(b && i && !b.isPosted) { i.steps[idx] = !i.steps[idx]; commit(); }
+    function handleStep(bUid, iUid, stepIdx) {
+        const b = app.batches.find(x => x.uid === bUid);
+        const i = b.invoices.find(x => x.uid === iUid);
+        i.steps[stepIdx] = !i.steps[stepIdx];
+        commit();
     }
 
     function postBatch(bUid) {
-        const b = app.batches.find(x=>x.uid===bUid);
-        if(b.isPosted) { b.isPosted=false; commit(); return; }
-        if(b.invoices.length>0 && b.invoices.every(i=>i.steps[2])) { b.isPosted=true; commit(); } 
-        else alert("All invoices must be APPROVED first!");
+        const b = app.batches.find(x => x.uid === bUid);
+        if(b.isPosted) { b.isPosted = false; commit(); return; }
+        const ready = b.invoices.length > 0 && b.invoices.every(inv => inv.steps[2]);
+        if(!ready) return alert("CANNOT POST: All Approved flags must be checked!");
+        b.isPosted = true;
+        commit();
     }
 
-    function editBatch(bUid, k, cur) {
-        const b = app.batches.find(x=>x.uid===bUid); if(b.isPosted) return;
-        let v = prompt(`Edit ${k}:`, cur); if(v!==null) {
-            if(k==='due'&&isPast(v)&&!confirm("Confirm Past Date?")) return;
-            b[k]=v; commit();
-        }
-    }
-
-    function editInv(bUid, iUid, k, cur) {
-        const b = app.batches.find(x=>x.uid===bUid); const i = b.invoices.find(x=>x.uid===iUid);
+    function editBatch(bUid, key, cur) {
+        const b = app.batches.find(x => x.uid === bUid);
         if(b.isPosted) return;
-        let v = prompt(`Edit ${k}:`, cur); if(v!==null) {
-            if(k==='amount') v=parseFloat(v)||0;
-            if(k==='vd'&&isPast(v)&&!confirm("Confirm Past Date?")) return;
-            i[k]=(k==='entity')?v.toUpperCase():v; commit();
+        let val = prompt(`Edit ${key}:`, cur);
+        if(val !== null) {
+            if(key === 'due' && isPast(val) && !confirm("Past Date. Confirm?")) return;
+            b[key] = val;
+            const catN = b.cat==='A'?app.config.catA : (b.cat==='B'?app.config.catB:app.config.catC);
+            const typeN = b.type==='Payment'?app.config.typeP:app.config.typeR;
+            b.title = `OL ${b.idOnly} ${catN} ${typeN}`;
+            commit();
         }
     }
 
-    function muteAlert(d) {
-        if(!app.dismissed.includes(d)) { app.dismissed.push(d); commit(); }
+    function editInv(bUid, iUid, key, cur) {
+        const b = app.batches.find(x => x.uid === bUid);
+        const i = b.invoices.find(x => x.uid === iUid);
+        if(b.isPosted) return;
+        let val = prompt(`Edit ${key}:`, cur);
+        if(val !== null) {
+            if(key==='amount') val = parseFloat(val)||0;
+            if(key==='vd' && isPast(val) && !confirm("Past Date?")) return;
+            i[key] = (key==='entity') ? val.toUpperCase() : val;
+            commit();
+        }
     }
 
     // --- Rendering ---
     function render() {
-        app.batches.sort((a,b) => (a.isPosted===b.isPosted)? new Date(a.due)-new Date(b.due) : (a.isPosted?1:-1));
+        app.batches.sort((a,b) => (a.isPosted === b.isPosted) ? new Date(a.due) - new Date(b.due) : (a.isPosted ? 1 : -1));
 
-        let totalPaid=0, totalRec=0, totalPend=0, vdToday=0;
-        const alerts = document.getElementById('global-alerts'); alerts.innerHTML="";
-        const daily={};
+        const alerts = document.getElementById('global-alerts'); alerts.innerHTML = "";
+        const daily = {};
+        let totalPaid=0, totalRec=0, totalDebt=0, vdPending=0;
         const todayStr = new Date().toISOString().split('T')[0];
 
         app.batches.forEach(b => {
-            const bSum = b.invoices.reduce((s,i)=>s+i.amount,0);
+            const bSum = b.invoices.reduce((s,i)=>s+i.amount, 0);
             if(b.isPosted) {
-                if(b.type==='Payment') totalPaid += bSum; else totalRec += bSum;
+                if(b.type === 'Payment') totalPaid += bSum; else totalRec += bSum;
             } else {
-                if(b.type==='Payment') {
-                    totalPend += bSum;
-                    daily[b.due] = (daily[b.due]||0)+bSum;
-                    if(b.due === todayStr) vdToday += bSum;
+                if(b.type === 'Payment') {
+                    totalDebt += bSum;
+                    daily[b.due] = (daily[b.due] || 0) + bSum;
+                    if(b.due === todayStr) vdPending += bSum;
                 }
             }
         });
 
+        // Update Scoreboard & Stat
         document.getElementById('sb-label-paid').innerText = `Cumulative ${app.config.typeP}`;
         document.getElementById('sb-val-paid').innerText = `$${totalPaid.toLocaleString()}`;
         document.getElementById('sb-label-rec').innerText = `Cumulative ${app.config.typeR}`;
         document.getElementById('sb-val-rec').innerText = `$${totalRec.toLocaleString()}`;
-        document.getElementById('sb-val-pend').innerText = `$${totalPend.toLocaleString()}`;
-        document.getElementById('live-stat').innerText = `Today's VD Pending: $${vdToday.toLocaleString()}`;
+        document.getElementById('sb-val-pend').innerText = `$${totalDebt.toLocaleString()}`;
+        document.getElementById('live-stat').innerText = `Today's VD Pending: $${vdPending.toLocaleString()}`;
 
-        Object.keys(daily).filter(d=>daily[d]>app.threshold).forEach(d => {
+        Object.keys(daily).filter(d => daily[d] > app.threshold).forEach(d => {
             if(!app.dismissed.includes(d)) {
-                alerts.innerHTML += `<div class="alert-box"><span>⚠️ ${d}: $${daily[d].toLocaleString()} exceeds threshold!</span><button class="btn-dismiss" onclick="muteAlert('${d}')">I've notified Finance</button></div>`;
+                alerts.innerHTML += `<div class="alert-box"><span>⚠️ ${d}: $${daily[d].toLocaleString()} Alert</span><button class="btn-dismiss" onclick="app.dismissed.push('${d}');commit()">I've notified Finance</button></div>`;
             }
         });
 
-        const list = document.getElementById('batch-render-list'); list.innerHTML="";
-        const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+        const list = document.getElementById('draw-list'); list.innerHTML = "";
+        const tmr = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
         app.batches.forEach(b => {
-            const sum = b.invoices.reduce((s,i)=>s+i.amount,0);
-            const dateErr = b.invoices.some(i => i.vd !== b.due);
+            const sum = b.invoices.reduce((s,i)=>s+i.amount, 0);
+            const vdM = b.invoices.some(i => i.vd !== b.due);
             
-            let h = `
-            <div class="batch-card ${b.isPosted?'is-posted':''}" style="border-top-color:${b.isPosted?'#ccc':(b.type==='Payment'?'#cf1322':'#389e0d')}">
+            let html = `
+            <div class="batch-card ${b.isPosted?'is-posted':''}" style="border-top-color: ${b.isPosted?'#ccc':(b.type==='Payment'?'#cf1322':'#389e0d')}">
                 <div class="batch-header">
                     <div>
                         <strong class="editable" onclick="editBatch('${b.uid}','idOnly','${b.idOnly}')">${b.title}</strong>
-                        ${dateErr ? '<span class="badge" style="background:var(--warning)">VD MISMATCH</span>' : ''}
-                        ${b.due === tomorrow && !b.isPosted ? '<span class="badge" style="background:var(--urgent)">DUE TOMORROW</span>' : ''}
-                        <div style="font-size:0.8em; color:#64748b; margin-top:5px;">Due: ${b.due} | Period: ${b.period||'N/A'}</div>
-                        <textarea class="comment-box" onchange="app.batches.find(x=>x.uid==='${b.uid}').comment=this.value;commit()">${b.comment}</textarea>
+                        ${vdM ? '<span class="badge" style="background:var(--warning)">VD MISMATCH</span>' : ''}
+                        ${b.due === tmr && !b.isPosted ? '<span class="badge" style="background:var(--urgent)">DUE TOMORROW</span>' : ''}
+                        <div style="font-size:0.8em; color:#64748b; margin-top:5px;">Due: ${b.due} | Period: ${b.period || 'N/A'}</div>
+                        <textarea class="comment-box" onchange="app.batches.find(x=>x.uid==='${b.uid}').comment=this.value; commit()" placeholder="Batch Notes...">${b.comment || ''}</textarea>
                     </div>
                     <div style="text-align:right">
                         <div class="amt-display" style="font-size:1.4em">$${sum.toLocaleString()}</div>
-                        <div style="margin:15px 0;">
-                            <button class="btn-action" style="width:auto;padding:10px 20px" onclick="addInv('${b.uid}')" ${b.isPosted?'disabled':''}>Add Invoice</button>
-                            <button class="btn-action" style="width:auto;padding:10px 20px;background:${b.isPosted?'#64748b':'#0f172a'};margin-left:10px" onclick="postBatch('${b.uid}')">${b.isPosted?'RELEASE':'POST BATCH'}</button>
+                        <div style="margin: 15px 0;">
+                            <button class="btn-action" style="width:auto; padding:10px 20px" onclick="addInv('${b.uid}')" ${b.isPosted?'disabled':''}>Add Invoice</button>
+                            <button class="btn-action" style="width:auto; padding:10px 20px; background:${b.isPosted?'#64748b':'#0f172a'}; margin-left:10px" onclick="postBatch('${b.uid}')">${b.isPosted?'RELEASE':'POST BATCH'}</button>
                         </div>
-                        <button style="border:none;background:none;color:#94a3b8;cursor:pointer;font-size:12px" onclick="if(confirm('Delete Batch?')){app.batches=app.batches.filter(x=>x.uid!=='${b.uid}');commit()}">Delete Batch</button>
+                        <button style="border:none; background:none; color:#94a3b8; cursor:pointer; font-size:12px" onclick="if(confirm('Delete Batch?')){app.batches=app.batches.filter(x=>x.uid!=='${b.uid}');commit()}">Delete Batch</button>
                     </div>
                 </div>
                 <div>`;
+
             b.invoices.forEach(i => {
-                h += `<div class="inv-row" style="${i.vd!==b.due?'background:#fffbeb':''}">
-                    <div class="editable font-sync" onclick="editInv('${b.uid}','${i.uid}','entity','${i.entity}')">${i.entity}</div>
-                    <div class="editable font-sync" onclick="editInv('${b.uid}','${i.uid}','ctr','${i.ctr}')">${i.ctr}</div>
-                    <div class="editable" style="font-weight:bold" onclick="editInv('${b.uid}','${i.uid}','supplier','${i.supplier}')">${i.supplier}<textarea class="comment-box" style="font-size:11px;min-height:30px" onchange="app.batches.find(x=>x.uid==='${b.uid}').invoices.find(y=>y.uid==='${i.uid}').comment=this.value;commit()">${i.comment}</textarea></div>
-                    <div style="font-size:0.8em;color:var(--primary);font-weight:600">${app.entities[i.entity]||'Unmapped'}</div>
-                    <div class="steps">
-                        <label><input type="checkbox" ${i.steps[0]?'checked':''} onclick="toggleStep('${b.uid}','${i.uid}',0)" ${b.isPosted?'disabled':''}> Created</label>
-                        <label><input type="checkbox" ${i.steps[1]?'checked':''} onclick="toggleStep('${b.uid}','${i.uid}',1)" ${b.isPosted?'disabled':''}> Sent</label>
-                        <label><input type="checkbox" ${i.steps[2]?'checked':''} onclick="toggleStep('${b.uid}','${i.uid}',2)" ${b.isPosted?'disabled':''}> Approved</label>
+                const iVdM = i.vd !== b.due;
+                html += `
+                <div class="inv-row" style="${iVdM ? 'background:#fffbeb;' : ''}">
+                    <div class="font-sync editable" onclick="editInv('${b.uid}','${i.uid}','entity','${i.entity}')">${i.entity}</div>
+                    <div class="font-sync editable" onclick="editInv('${b.uid}','${i.uid}','ctr','${i.ctr}')">${i.ctr}</div>
+                    <div class="editable" style="font-weight:bold" onclick="editInv('${b.uid}','${i.uid}','supplier','${i.supplier}')">${i.supplier}
+                        <textarea class="comment-box" style="font-size:11px; min-height:30px" onchange="app.batches.find(x=>x.uid==='${b.uid}').invoices.find(y=>y.uid==='${i.uid}').comment=this.value; commit()" placeholder="Notes...">${i.comment || ''}</textarea>
                     </div>
-                    <div class="amt-display ${i.amount>=0?'amt-pos':'amt-neg'}" onclick="editInv('${b.uid}'
+                    <div style="font-size:0.8em; color:var(--primary); font-weight:600">${app.entities[i.entity] || 'Unmapped'}</div>
+                    <div class="steps">
+                        <label><input type="checkbox" ${i.steps[0]?'checked':''} onclick="handleStep('${b.uid}','${i.uid}',0)" ${b.isPosted?'disabled':''}> Created</label>
+                        <label><input type="checkbox" ${i.steps[1]?'checked':''} onclick="handleStep('${b.uid}','${i.uid}',1)" ${b.isPosted?'disabled':''}> Sent</label>
+                        <label><input type="checkbox" ${i.steps[2]?'checked':''} onclick="handleS
