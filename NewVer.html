@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice Audit Pro v8.0</title>
+    <style>
+        :root { --urgent: #ff4d4f; --primary: #1a73e8; --success: #52c41a; --warning: #faad14; --text: #2c3e50; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f9; margin: 0; padding: 20px; color: var(--text); }
+        .container { max-width: 1200px; margin: auto; }
+        
+        /* Sidebar/Nav Simulation */
+        .nav-bar { display: flex; gap: 20px; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 10px; }
+        .nav-link { cursor: pointer; font-weight: bold; color: #666; text-decoration: none; }
+        .nav-link.active { color: var(--primary); border-bottom: 2px solid var(--primary); }
+
+        /* Alert Section */
+        .alert-item { background: #fff2f0; border: 1px solid #ffccc7; color: #a8071a; padding: 12px 20px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid var(--urgent); display: flex; justify-content: space-between; }
+        
+        /* Panel Styles */
+        .panel { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .full-width { grid-column: span 3; }
+        
+        input, select, button { padding: 10px; border: 1px solid #d1d9e0; border-radius: 6px; font-size: 14px; }
+        .btn-main { background: var(--primary); color: white; border: none; cursor: pointer; transition: 0.3s; }
+        .btn-main:hover { background: #1557b0; }
+
+        /* Batch Card */
+        .batch-card { background: white; border-radius: 12px; margin-bottom: 25px; border-top: 5px solid #999; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .batch-header { padding: 15px 20px; background: #fafafa; display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #eee; }
+        .period-warn { color: white; background: var(--urgent); padding: 2px 8px; border-radius: 4px; font-size: 12px; animation: blink 1s infinite; }
+        
+        /* Invoice Table */
+        .inv-row { display: grid; grid-template-columns: 2fr 1fr 1fr 120px 50px; gap: 15px; padding: 12px 20px; border-bottom: 1px solid #f0f0f0; align-items: center; }
+        .amt-pos { color: #cf1322; font-weight: bold; text-align: right; }
+        .amt-neg { color: #389e0d; font-weight: bold; text-align: right; }
+        
+        @keyframes blink { 50% { opacity: 0.5; } }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="nav-bar">
+        <span class="nav-link active" onclick="showPage('main')">Dashboard</span>
+        <span class="nav-link" onclick="showPage('vendors')">Vendor Master</span>
+        <span class="nav-link" onclick="showPage('settings')">Settings</span>
+    </div>
+
+    <div id="alert-zone"></div>
+
+    <div id="page-main">
+        <div class="panel">
+            <div class="grid-3">
+                <h3 class="full-width" style="margin-top:0">Create New Internal Batch</h3>
+                <input type="text" id="batchId" placeholder="Batch ID (e.g. DOC-2026-001)">
+                <select id="batchCat">
+                    <option value="">-- Select Category --</option>
+                    <option value="A">Category A (High Priority)</option>
+                    <option value="B">Category B (Standard)</option>
+                    <option value="C">Category C (Administrative)</option>
+                </select>
+                <select id="batchType">
+                    <option value="Payment">Payment Batch</option>
+                    <option value="Receipt">Receipt Batch</option>
+                </select>
+                <input type="month" id="period" placeholder="Accounting Period">
+                <input type="date" id="dueDate" title="Due Date">
+                <button class="btn-main" onclick="createBatch()">Initialize Batch</button>
+            </div>
+        </div>
+        <div id="batch-list"></div>
+    </div>
+
+    <div id="page-vendors" class="hidden">
+        <div class="panel">
+            <h3>Vendor Management</h3>
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <input type="text" id="newVendor" placeholder="Vendor Name" style="flex:1">
+                <button class="btn-main" onclick="addVendor()">Add Vendor</button>
+            </div>
+            <ul id="vendor-list" style="list-style:none; padding:0"></ul>
+        </div>
+    </div>
+
+    <div id="page-settings" class="hidden">
+        <div class="panel">
+            <h3>Configuration</h3>
+            <label>Daily Payment Threshold ($):</label><br><br>
+            <input type="number" id="thresholdSetting" style="width:200px">
+            <button class="btn-main" onclick="saveSettings()">Save Configuration</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Data Structure
+    let state = {
+        batches: JSON.parse(localStorage.getItem('audit_batches')) || [],
+        vendors: JSON.parse(localStorage.getItem('audit_vendors')) || ['Internal', 'Utility', 'Global Logistics'],
+        threshold: parseFloat(localStorage.getItem('audit_threshold')) || 10000,
+        mutedDates: JSON.parse(localStorage.getItem('audit_muted')) || []
+    };
+
+    function showPage(pageId) {
+        document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+        event.target.classList.add('active');
+        ['main', 'vendors', 'settings'].forEach(p => document.getElementById('page-'+p).classList.add('hidden'));
+        document.getElementById('page-'+pageId).classList.remove('hidden');
+        if(pageId === 'vendors') renderVendors();
+        if(pageId === 'settings') document.getElementById('thresholdSetting').value = state.threshold;
+    }
+
+    function createBatch() {
+        const id = document.getElementById('batchId').value;
+        const cat = document.getElementById('batchCat').value;
+        const period = document.getElementById('period').value;
+        const due = document.getElementById('dueDate').value;
+        if(!id || !cat || !period || !due) return alert("All fields are required!");
+
+        state.batches.push({
+            id: Date.now(),
+            batchId: id,
+            category: cat,
+            type: document.getElementById('batchType').value,
+            period: period,
+            dueDate: due,
+            invoices: []
+        });
+        saveAndRender();
+    }
+
+    function addInvoice(batchUid) {
+        const vendor = prompt("Select Vendor (or type new one):", state.vendors[0]);
+        const invNo = prompt("Invoice Number:");
+        const amount = parseFloat(prompt("Amount (Positive for Outflow, Negative for Credit):") || 0);
+        if(!invNo) return;
+
+        const bIdx = state.batches.findIndex(b => b.id === batchUid);
+        state.batches[bIdx].invoices.push({
+            id: Date.now(),
+            vendor, invNo, amount,
+            steps: [false, false, false]
+        });
+        saveAndRender();
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('audit_batches', JSON.stringify(state.batches));
+        localStorage.setItem('audit_vendors', JSON.stringify(state.vendors));
+        localStorage.setItem('audit_threshold', state.threshold);
+        renderAlerts();
+        renderBatches();
+    }
+
+    function renderAlerts() {
+        const zone = document.getElementById('alert-zone');
+        zone.innerHTML = '';
+        const totals = {};
+        state.batches.forEach(b => {
+            const isDone = b.invoices.length > 0 && b.invoices.every(i => i.steps.every(s => s));
+            if(!isDone && b.type === 'Payment') {
+                const sum = b.invoices.reduce((acc, curr) => acc + curr.amount, 0);
+                totals[b.dueDate] = (totals[b.dueDate] || 0) + sum;
+            }
+        });
+
+        Object.keys(totals).filter(d => totals[d] > state.threshold).forEach(date => {
+            zone.innerHTML += `
+                <div class="alert-item">
+                    <span>⚠️ <strong>${date}</strong>: Accumulated Payment <b>$${totals[date].toLocaleString()}</b> exceeds threshold!</span>
+                </div>`;
+        });
+    }
+
+    function renderBatches() {
+        const list = document.getElementById('batch-list');
+        list.innerHTML = '';
+        state.batches.forEach((b, bIdx) => {
+            const netSum = b.invoices.reduce((s, i) => s + i.amount, 0);
+            const isDone = b.invoices.length > 0 && b.invoices.every(i => i.steps.every(s => s));
+            
+            // Period Validation: Compare Period (YYYY-MM) with DueDate (YYYY-MM)
+            const periodMonth = b.period; 
+            const dueMonth = b.dueDate.substring(0, 7);
+            const periodMismatch = periodMonth !== dueMonth;
+            const typeMismatch = (b.type === 'Payment' && netSum < 0) || (b.type === 'Receipt' && netSum > 0);
+
+            list.innerHTML += `
+                <div class="batch-card" style="border-top-color: ${isDone ? '#ccc' : (b.type === 'Payment' ? '#cf1322' : '#389e0d')}">
+                    <div class="batch-header">
+                        <div>
+                            <strong style="font-size:18px">${b.batchId}</strong> 
+                            <span style="margin-left:10px; color:#666">Cat: ${b.category} | ${b.type}</span><br>
+                            <small>Accounting Period: ${b.period} | Due: ${b.dueDate}</small>
+                            ${periodMismatch ? `<span class="period-warn">PERIOD MISMATCH</span>` : ''}
+                        </div>
+                        <div style="text-align:right">
+                            <span style="font-size:18px; font-weight:bold">$${netSum.toLocaleString()}</span>
+                            ${typeMismatch ? `<span style="color:var(--warning)" title="Sum direction conflicts with Batch Type">❓</span>` : ''}
+                            <div style="margin-top:10px">
+                                <button onclick="addInvoice(${b.id})">Add Invoice</button>
+                                <button onclick="state.batches.splice(${bIdx},1);saveAndRender()" style="color:red">Del</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        ${b.invoices.map((inv, iIdx) => `
+                            <div class="inv-row">
+                                <div><strong>${inv.vendor}</strong><br><small>${inv.invNo}</small></div>
+                                <div style="font-size:11px">
+                                    <input type="checkbox" ${inv.steps[0]?'checked':''} onclick="toggleStep(${bIdx},${iIdx},0)"> Create
+                                    <input type="checkbox" ${inv.steps[1]?'checked':''} onclick="toggleStep(${bIdx},${iIdx},1)"> Send
+                                    <input type="checkbox" ${inv.steps[2]?'checked':''} onclick="toggleStep(${bIdx},${iIdx},2)"> Appr
+                                </div>
+                                <div class="${inv.amount >= 0 ? 'amt-pos' : 'amt-neg'}">$${inv.amount.toLocaleString()}</div>
+                                <button onclick="state.batches[${bIdx}].invoices.splice(${iIdx},1);saveAndRender()">Remove</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    function toggleStep(bIdx, iIdx, sIdx) {
+        state.batches[bIdx].invoices[iIdx].steps[sIdx] = !state.batches[bIdx].invoices[iIdx].steps[sIdx];
+        saveAndRender();
+    }
+
+    function renderVendors() {
+        const list = document.getElementById('vendor-list');
+        list.innerHTML = state.vendors.map((v, i) => `
+            <li style="padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between">
+                ${v} <button onclick="state.vendors.splice(${i},1);saveAndRender();renderVendors()" style="color:red; border:none; background:none; cursor:pointer">Delete</button>
+            </li>
+        `).join('');
+    }
+
+    function addVendor() {
+        const v = document.getElementById('newVendor').value;
+        if(v) { state.vendors.push(v); document.getElementById('newVendor').value = ''; renderVendors(); saveAndRender(); }
+    }
+
+    function saveSettings() {
+        state.threshold = parseFloat(document.getElementById('thresholdSetting').value);
+        saveAndRender();
+        alert("Configuration saved!");
+    }
+
+    saveAndRender();
+</script>
+</body>
+</html>
